@@ -14,9 +14,9 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.ref }}
-  # Superseded PR runs are cancelled; every commit on main keeps its own result.
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  # One group per PR (superseded runs are cancelled) and one per commit on main (never cancelled).
+  group: ci-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
 
 jobs:
   dotnet:
