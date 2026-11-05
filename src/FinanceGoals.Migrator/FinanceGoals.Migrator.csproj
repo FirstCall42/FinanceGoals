@@ -4,4 +4,23 @@
     <OutputType>Exe</OutputType>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Include="dbup-sqlserver" />
+    <PackageReference Include="Microsoft.Data.SqlClient" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.CommandLine" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" />
+  </ItemGroup>
+
+  <!-- The scripts travel inside the assembly, so the migrator image needs no other files.
+       Resource names keep the folder ("migrations/0001_x.sql"), which DbUp sorts and journals. -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\db\migrations\*.sql" LogicalName="migrations/%(Filename)%(Extension)" />
+    <EmbeddedResource Include="..\..\db\repeatable\*.sql" LogicalName="repeatable/%(Filename)%(Extension)" />
+    <EmbeddedResource Include="..\..\db\seed\*.sql" LogicalName="seed/%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="FinanceGoals.Migrator.Tests" />
+  </ItemGroup>
+
 </Project>

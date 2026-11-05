@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="Testcontainers.MsSql" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\FinanceGoals.Migrator\FinanceGoals.Migrator.csproj" />
+  </ItemGroup>
+
+  <!-- Scripts that exercise failure handling, embedded the same way as the real ones. -->
+  <ItemGroup>
+    <EmbeddedResource Include="TestScripts\*.sql" LogicalName="migrations/%(Filename)%(Extension)" />
+  </ItemGroup>
+
+</Project>
