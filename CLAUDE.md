@@ -88,6 +88,7 @@ Test and production run on Azure free tiers, and the monthly cost must stay at $
 - One issue per branch: `<type>/<issue number>-<short-name>`, e.g. `chore/5-solution-structure`. Branch from an up-to-date `main`.
 - PR titles follow Conventional Commits with a scope, e.g. `feat(debt): annuity schedule`.
 - Each PR description contains `Closes #<n>` and fills in the PR template. Each PR gets exactly one type label: `feature`, `bug` or `chore`. The `PR rules` workflow checks all three.
+- Dependencies: Dependabot alerts and CodeQL scanning are on (`tools/github/setup-repo.sh`), but Dependabot opens no PRs. Fix alerts promptly, and update dependencies in normal PRs.
 - PRs are squash-merged and their branches are deleted, so check whether a PR is already merged before pushing more commits to its branch.
 - If review feedback states a general rule, add it to this file.
 
