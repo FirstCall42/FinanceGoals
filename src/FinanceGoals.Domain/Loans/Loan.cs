@@ -78,7 +78,7 @@ public sealed record LoanPeriod
         Start = start;
         RateType = rateType;
         RepaymentType = repaymentType;
-        Rates = ordered;
+        Rates = Array.AsReadOnly(ordered);
     }
 
     public DateOnly Start { get; }
@@ -96,14 +96,24 @@ public sealed record LoanPeriod
 
 /// <summary>
 /// A loan or mortgage as a sequence of periods, so every loan type (annuity, straight-line,
-/// fixed-rate and interest-only periods) is computed by one schedule engine. Payments are monthly,
-/// starting on <see cref="FirstPaymentDate"/>.
+/// fixed-rate and interest-only periods) is computed by one schedule engine. The loan is paid out on
+/// <see cref="Start"/>; payments are monthly from <see cref="FirstPaymentDate"/> to
+/// <see cref="LastPaymentDate"/>, and every period and rate change falls in that span.
 /// </summary>
 public sealed class Loan
 {
     private readonly LoanPeriod[] _periods;
 
-    public Loan(string name, Money principal, DateOnly firstPaymentDate, int termMonths, IReadOnlyList<LoanPeriod> periods, Money? feePerPayment = null)
+    // paidOut: the day the loan was paid out. Defaults to a month before the first payment; banks
+    // often pay out mid-month, making the first interest period longer or shorter than a month.
+    public Loan(
+        string name,
+        Money principal,
+        DateOnly firstPaymentDate,
+        int termMonths,
+        IReadOnlyList<LoanPeriod> periods,
+        Money? feePerPayment = null,
+        DateOnly? paidOut = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentNullException.ThrowIfNull(periods);
@@ -129,17 +139,27 @@ public sealed class Loan
             throw new ArgumentException("A loan has at least one period.", nameof(periods));
         }
 
-        // The loan starts one month before the first payment (interest accrues for that month).
-        var start = firstPaymentDate.AddMonths(-1);
-        if (ordered[0].Start != start)
+        var start = paidOut ?? firstPaymentDate.AddMonths(-1);
+        if (start >= firstPaymentDate)
         {
-            throw new ArgumentException($"The first period must start on {start:yyyy-MM-dd}, a month before the first payment.", nameof(periods));
+            throw new ArgumentException("The loan must be paid out before the first payment.", nameof(paidOut));
         }
 
-        var end = start.AddMonths(termMonths);
-        if (ordered.Select(period => period.Start).Distinct().Count() != ordered.Length || ordered[^1].Start >= end)
+        if (ordered[0].Start != start)
         {
-            throw new ArgumentException("Periods must start on different days, before the loan ends.", nameof(periods));
+            throw new ArgumentException($"The first period must start when the loan is paid out, {start:yyyy-MM-dd}.", nameof(periods));
+        }
+
+        // One end for every check: the last payment day. AddMonths keeps month-end payment days.
+        var lastPayment = firstPaymentDate.AddMonths(termMonths - 1);
+        if (ordered.Select(period => period.Start).Distinct().Count() != ordered.Length)
+        {
+            throw new ArgumentException("Two periods start on the same day.", nameof(periods));
+        }
+
+        if (ordered[^1].Start > lastPayment || ordered[^1].Rates[^1].EffectiveFrom > lastPayment)
+        {
+            throw new ArgumentException($"A period or rate change falls after the last payment, {lastPayment:yyyy-MM-dd}.", nameof(periods));
         }
 
         for (var i = 0; i < ordered.Length - 1; i++)
@@ -155,6 +175,7 @@ public sealed class Loan
         FirstPaymentDate = firstPaymentDate;
         TermMonths = termMonths;
         FeePerPayment = fee;
+        Start = start;
         _periods = ordered;
     }
 
@@ -170,16 +191,24 @@ public sealed class Loan
     public Money FeePerPayment { get; }
 
     /// <summary>The periods, in order; contiguous from the loan's start to its end.</summary>
-    public IReadOnlyList<LoanPeriod> Periods => _periods;
+    public IReadOnlyList<LoanPeriod> Periods => Array.AsReadOnly(_periods);
 
-    /// <summary>The day the loan starts: a month before the first payment.</summary>
-    public DateOnly Start => FirstPaymentDate.AddMonths(-1);
+    /// <summary>The day the loan was paid out; interest runs from here to the first payment.</summary>
+    public DateOnly Start { get; }
 
     /// <summary>The day of the last payment.</summary>
     public DateOnly LastPaymentDate => FirstPaymentDate.AddMonths(TermMonths - 1);
 
-    /// <summary>The period a day falls in.</summary>
-    public LoanPeriod PeriodOn(DateOnly day) => _periods.Last(period => period.Start <= day);
+    /// <summary>The period a day falls in, from <see cref="Start"/> to <see cref="LastPaymentDate"/>.</summary>
+    public LoanPeriod PeriodOn(DateOnly day)
+    {
+        if (day < Start || day > LastPaymentDate)
+        {
+            throw new ArgumentOutOfRangeException(nameof(day), day, $"The loan runs from {Start:yyyy-MM-dd} to {LastPaymentDate:yyyy-MM-dd}.");
+        }
+
+        return _periods.Last(period => period.Start <= day);
+    }
 
     /// <summary>The nominal annual rate in effect on a day of the loan.</summary>
     public decimal RateOn(DateOnly day) => PeriodOn(day).RateOn(day);
@@ -205,6 +234,6 @@ public sealed class Loan
         var rates = period.Rates.Where(rate => rate.EffectiveFrom != change.EffectiveFrom).Append(change).ToArray();
         var updated = new LoanPeriod(period.Start, period.RateType, period.RepaymentType, rates);
         var periods = _periods.Select(p => ReferenceEquals(p, period) ? updated : p).ToArray();
-        return new Loan(Name, Principal, FirstPaymentDate, TermMonths, periods, FeePerPayment);
+        return new Loan(Name, Principal, FirstPaymentDate, TermMonths, periods, FeePerPayment, Start);
     }
 }

@@ -95,7 +95,7 @@ public sealed class LoanTests
         // Two periods starting the same day; a period starting after the loan ends.
         Should.Throw<ArgumentException>(() => new Loan("Mortgage", _threeMillion, _firstPayment, 300, [Variable(_start, rate), Variable(_start, rate)]));
         Should.Throw<ArgumentException>(() => new Loan("Mortgage", _threeMillion, _firstPayment, 12,
-            [Variable(_start, rate), Variable(new DateOnly(2027, 1, 1), new RateChange(new DateOnly(2027, 1, 1), 0.05m))]));
+            [Variable(_start, rate), Variable(new DateOnly(2027, 1, 2), new RateChange(new DateOnly(2027, 1, 2), 0.05m))]));
         // A rate change dated after its period has ended.
         Should.Throw<ArgumentException>(() => new Loan("Mortgage", _threeMillion, _firstPayment, 300,
         [
@@ -109,6 +109,71 @@ public sealed class LoanTests
         Should.Throw<ArgumentOutOfRangeException>(() => new RateChange(_start, -0.01m));
         Should.Throw<ArgumentException>(() => Variable(_start, new RateChange(new DateOnly(2026, 2, 1), 0.05m)));
         Should.Throw<ArgumentException>(() => Variable(_start, rate, new RateChange(_start, 0.06m)));
+    }
+
+    [TestMethod]
+    public void A_month_end_loan_has_one_consistent_end()
+    {
+        // First payment on the 31st: payments fall on each month's last day, and the last one bounds everything.
+        var firstPayment = new DateOnly(2026, 3, 31);
+        var start = firstPayment.AddMonths(-1);
+        var loan = new Loan("Mortgage", _threeMillion, firstPayment, 2,
+        [
+            Variable(start, new RateChange(start, 0.05m)),
+            Variable(new DateOnly(2026, 4, 29), new RateChange(new DateOnly(2026, 4, 29), 0.06m)),
+        ]);
+
+        loan.Start.ShouldBe(new DateOnly(2026, 2, 28));
+        loan.LastPaymentDate.ShouldBe(new DateOnly(2026, 4, 30));
+        loan.WithRateChange(new RateChange(new DateOnly(2026, 4, 30), 0.07m)).RateOn(new DateOnly(2026, 4, 30)).ShouldBe(0.07m);
+        Should.Throw<ArgumentOutOfRangeException>(() => loan.WithRateChange(new RateChange(new DateOnly(2026, 5, 1), 0.07m)));
+        Should.Throw<ArgumentException>(() => new Loan("Mortgage", _threeMillion, firstPayment, 2,
+            [Variable(start, new RateChange(start, 0.05m)), Variable(new DateOnly(2026, 5, 1), new RateChange(new DateOnly(2026, 5, 1), 0.06m))]))
+            .ParamName.ShouldBe("periods");
+    }
+
+    [TestMethod]
+    public void A_mid_month_payout_starts_the_loan_on_that_day()
+    {
+        var paidOut = new DateOnly(2026, 1, 15);
+
+        var loan = new Loan("Mortgage", _threeMillion, new DateOnly(2026, 2, 28), 300,
+            [Variable(paidOut, new RateChange(paidOut, 0.05m))], paidOut: paidOut);
+
+        loan.Start.ShouldBe(paidOut);
+        loan.WithRateChange(new RateChange(new DateOnly(2026, 6, 1), 0.055m)).Start.ShouldBe(paidOut);
+        Should.Throw<ArgumentException>(() => new Loan("Mortgage", _threeMillion, _firstPayment, 300,
+            [Variable(_firstPayment, new RateChange(_firstPayment, 0.05m))], paidOut: _firstPayment)).ParamName.ShouldBe("paidOut");
+    }
+
+    [TestMethod]
+    public void A_rate_change_on_a_period_boundary_belongs_to_the_next_period()
+    {
+        var boundary = new DateOnly(2031, 1, 1);
+        var loan = new Loan("Mortgage", _threeMillion, _firstPayment, 300,
+        [
+            Variable(boundary, new RateChange(boundary, 0.052m)),
+            Variable(_start, new RateChange(_start, 0.05m)), // out of order on purpose: the loan sorts them
+        ]);
+
+        var changed = loan.WithRateChange(new RateChange(boundary, 0.053m)).WithRateChange(new RateChange(new DateOnly(2032, 1, 1), 0.06m));
+
+        changed.Periods[0].Rates.ShouldHaveSingleItem().AnnualRate.ShouldBe(0.05m);
+        changed.Periods[1].Rates.Select(rate => rate.AnnualRate).ShouldBe([0.053m, 0.06m]);
+        Should.Throw<ArgumentException>(() => new Loan("Mortgage", _threeMillion, _firstPayment, 300,
+            [Variable(_start, new RateChange(_start, 0.05m), new RateChange(boundary, 0.06m)), Variable(boundary, new RateChange(boundary, 0.052m))]))
+            .ParamName.ShouldBe("periods");
+    }
+
+    [TestMethod]
+    public void Periods_and_rates_cannot_be_changed_from_outside()
+    {
+        var loan = new Loan("Mortgage", _threeMillion, _firstPayment, 300, [Variable(_start, new RateChange(_start, 0.05m))]);
+
+        loan.Periods.ShouldNotBeAssignableTo<LoanPeriod[]>();
+        loan.Periods[0].Rates.ShouldNotBeAssignableTo<RateChange[]>();
+        Should.Throw<ArgumentOutOfRangeException>(() => loan.RateOn(new DateOnly(2025, 12, 31)));
+        Should.Throw<ArgumentOutOfRangeException>(() => loan.RateOn(new DateOnly(2051, 1, 2)));
     }
 
     [TestMethod]
