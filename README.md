@@ -94,3 +94,26 @@ Locally the database must be contained (`CONTAINMENT = PARTIAL`) so users can ha
 On Azure SQL, creating an `entra` app user requires the migrator to sign in as an Entra principal (not a SQL user), and the server needs permission to look up Entra names. The Bicep templates (#18) and the deploy workflow (#21) cover this.
 
 CI checks every PR's database scripts (the "Database checks" job): merged migration and seed scripts must be unchanged, both on disk and as embedded in the migrator, and a database built by `main`'s migrator and then upgraded by the PR's must match a fresh build. There are no releases yet, so `main` stands in for the last release. To run these checks locally, build `main`'s migrator and point `FINANCEGOALS_BASE_MIGRATOR` at its `FinanceGoals.Migrator.dll`; without it the test reports inconclusive.
+
+## Cloud
+
+GitHub Actions signs in to Azure with OpenID Connect, so no Azure password, secret or certificate is stored in GitHub. Each environment has its own identity:
+
+| GitHub environment | Azure identity (in `rg-financegoals-shared`) | Access |
+| --- | --- | --- |
+| `test` | `id-financegoals-deploy-test` | Contributor on `rg-financegoals-test` only |
+| `production` | `id-financegoals-deploy-production` | Contributor on `rg-financegoals-prod` only |
+
+Each identity trusts only jobs running in its GitHub environment, and both environments are deployable from `main` only. Neither identity can change access, touch the other environment, or see the rest of the subscription.
+
+Set it up once, and again whenever the script changes (it is idempotent):
+
+```sh
+az login
+tools/azure/setup-github-oidc.sh FirstCall42/FinanceGoals --dry-run   # shows what it would change
+tools/azure/setup-github-oidc.sh FirstCall42/FinanceGoals             # default region: norwayeast
+```
+
+Then run **Actions > Azure sign-in check** from `main`. Each environment signs in, reaches its own resource group, and is refused the other.
+
+Everything the script creates is free: resource groups, managed identities, federated credentials and role assignments.
