@@ -1,0 +1,59 @@
+name: PR rules
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize, labeled, unlabeled]
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: read
+
+jobs:
+  linked-issue:
+    name: Linked issue
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require a linked issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          count=$(gh api graphql \
+            -f query='query($owner:String!,$name:String!,$pr:Int!){repository(owner:$owner,name:$name){pullRequest(number:$pr){closingIssuesReferences(first:1){totalCount}}}}' \
+            -f owner="${REPO%/*}" -f name="${REPO#*/}" -F pr="$PR" \
+            --jq '.data.repository.pullRequest.closingIssuesReferences.totalCount')
+          if [ "$count" -eq 0 ]; then
+            echo "::error::Link an issue: add 'Closes #<number>' to the PR description."
+            exit 1
+          fi
+          echo "Linked issues: $count"
+
+  title:
+    name: Conventional title
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check PR title
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          pattern='^(feat|fix|chore|docs|refactor|test|ci|build|perf)(\([a-z0-9-]+\))?!?: .+'
+          if ! [[ "$TITLE" =~ $pattern ]]; then
+            echo "::error::PR title must follow Conventional Commits, e.g. 'feat(debt): annuity schedule'. Got: $TITLE"
+            exit 1
+          fi
+
+  type-label:
+    name: Type label
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require exactly one of feature, bug, chore
+        env:
+          LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+        run: |
+          n=$(echo "$LABELS" | jq '[.[] | select(. == "feature" or . == "bug" or . == "chore" or . == "dependencies")] | length')
+          if [ "$n" -ne 1 ]; then
+            echo "::error::Add exactly one type label: feature, bug or chore. Current labels: $LABELS"
+            exit 1
+          fi

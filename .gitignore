@@ -1,0 +1,30 @@
+# .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+TestResults/
+coverage/
+*.trx
+
+# Node / Angular
+node_modules/
+dist/
+.angular/
+
+# IDEs and OS
+.idea/
+.vscode/*
+!.vscode/extensions.json
+Thumbs.db
+.DS_Store
+
+# Local secrets and environment files
+.env
+.env.*
+!.env.example
+*.pfx
+
+# Tool logs
+tools/github/.ruleset-error.log
