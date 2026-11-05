@@ -146,8 +146,10 @@ for env in "${ENVIRONMENTS[@]}"; do
 done
 
 echo "== Resource providers"
-# A new subscription has managed identities switched off until the provider is registered (free).
-for namespace in Microsoft.ManagedIdentity; do
+# A new subscription has these switched off until their providers are registered (free). The deploy
+# identities cannot register providers (they are Contributor on a resource group only), so every
+# service infra/main.bicep uses is registered here.
+for namespace in Microsoft.ManagedIdentity Microsoft.App Microsoft.OperationalInsights Microsoft.Sql Microsoft.Web; do
   state="NotRegistered"
   if [ -n "$AZ_SIGNED_IN" ]; then
     state=$(az provider show --namespace "$namespace" --query registrationState -o tsv)

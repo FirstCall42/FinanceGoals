@@ -22,13 +22,25 @@ Test and production must cost $0 a month. This page lists the free allowances Fi
 | [Azure SQL Database free offer](https://learn.microsoft.com/azure/azure-sql/database/free-offer) | Per database, per month, for the life of the subscription: 100,000 vCore-seconds of serverless compute, 32 GB data, 32 GB backup. Up to 10 such databases per subscription | We choose auto-pause: no charge, but the database is offline until the next month. The other choice, continue and bill, can't be undone | Portal: database **Overview**, "Free amount remaining" |
 | [Container Apps](https://azure.microsoft.com/pricing/details/container-apps/) (Consumption) | Per subscription, per month: 180,000 vCPU-seconds, 360,000 GiB-seconds, 2 million requests | Billed per second beyond the grant. Nothing is used while scaled to zero | Portal: Container App **Metrics** (Replica count, Requests); Cost Management |
 | [Static Web Apps](https://learn.microsoft.com/azure/static-web-apps/quotas) (Free plan) | 100 GB bandwidth a month, 3 preview environments, 2 custom domains, 250 MB per environment | No overage on the Free plan: traffic beyond 100 GB is refused | Portal: Static Web App **Metrics** (Data out) |
-| [Log Analytics](https://azure.microsoft.com/pricing/details/monitor/) (Analytics Logs) | 5 GB ingestion a month free (per billing account, by Microsoft's answers; verify on the pricing page); 31 days retention included | Billed per GB beyond 5 GB | Workspace **Usage and estimated costs**; keep request logging lean (health probes are not logged) |
+| [Log Analytics](https://azure.microsoft.com/pricing/details/monitor/) (Analytics Logs) | 5 GB ingestion a month free (per billing account, by Microsoft's answers; verify on the pricing page); 31 days retention included | Billed per GB beyond 5 GB. Each workspace has a daily cap of 0.05 GB (`infra/modules/monitoring.bicep`), so two environments ingest at most about 3 GB a month; at the cap, ingestion stops until the next day | Workspace **Usage and estimated costs**; keep request logging lean (health probes are not logged) |
 | Resource groups, managed identities, federated credentials, role assignments, budgets | Free | n/a | n/a |
 | GitHub Container Registry (public repository) | Free | n/a | n/a |
 
+## Regions and quotas
+
+This subscription can only create some things in some regions (checked 2026-11):
+
+- **Azure SQL:** Norway East, West Europe, North Europe and UK South refused new servers. Sweden Central, Germany West Central and France Central accepted.
+- **Static Web Apps (Free):** West Europe refused new apps; East US 2 works. The region holds only the app's settings; the site is served globally.
+- **Container Apps:** one environment per region per subscription. Test uses Sweden Central, so production uses Germany West Central.
+
+Keep each environment's API, migrator and database in one region: traffic between regions is billed.
+
+Check where SQL can be created: `az rest --method get --url "https://management.azure.com/subscriptions/<id>/providers/Microsoft.Sql/locations/<region>/capabilities?api-version=2023-08-01" --query "{status:status, reason:reason}"` ("Available" works; "Visible" with a reason means restricted).
+
 ## Not free: avoid or decide explicitly
 
-- **[Key Vault](https://azure.microsoft.com/pricing/details/key-vault/)** has no free tier. Secrets operations cost about $0.03 per 10,000, which is cents, not $0. Prefer managed identities, so there are no secrets to store. The API can sign in to Azure SQL with its managed identity, and the migrator already supports Entra users. If #18 still needs a vault, flag it as a cost.
+- **[Key Vault](https://azure.microsoft.com/pricing/details/key-vault/)** has no free tier. Secrets operations cost about $0.03 per 10,000, which is cents, not $0. Prefer managed identities, so there are no secrets to store. The API can sign in to Azure SQL with its managed identity, and the migrator already supports Entra users. #18 decided against a vault: there are no secrets to store.
 - **Anything with a fixed monthly price** (a provisioned SQL tier, a dedicated Container Apps workload profile, Static Web Apps Standard, a custom domain certificate bought through Azure) is out unless the owner decides otherwise.
 
 ## How to check usage

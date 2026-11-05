@@ -27,6 +27,7 @@ npm run build
 - `src/FinanceGoals.Api`: Minimal API. References Application and Infrastructure.
 - `src/FinanceGoals.Migrator`: DbUp console app that applies the database scripts. Stands alone.
 - `tests/`: one test project per layer.
+- `infra/`: Bicep for one environment (`main.bicep`, `modules/`) and one parameter file per environment. Deploy with `az deployment group create -g rg-financegoals-<env> -p infra/<env>.bicepparam`.
 - `web/`: Angular app (standalone components, zoneless, signals). Vitest for unit tests, ESLint and Prettier.
 
 ## C# conventions
@@ -71,6 +72,9 @@ npm run build
 
 Test and production run on Azure free tiers, and the monthly cost must stay at $0. Flag anything that could incur a charge.
 
+- Every Azure resource is defined in `infra/`; never configure anything in the portal. CI compiles and lints the templates (the "Infra" check).
+- No Key Vault and no stored secrets: workloads sign in to Azure SQL and other services with their managed identities.
+- Keep each environment in one region (traffic between regions is billed): test in `swedencentral`, production in `germanywestcentral`. The subscription allows one Container Apps environment per region.
 - `docs/free-tier.md` lists the free allowances, the limit behaviour and what is not free. Update it when adding an Azure service. Where a service lets you choose, set it to stop at the free limit, not to bill overage.
 - Uptime monitors call `GET /health/live` only, at most once an hour. Never point a monitor at `/health/ready`, which wakes the database.
 

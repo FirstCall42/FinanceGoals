@@ -1,8 +1,8 @@
 name: CI
 
 # Build, format and test checks for every pull request to main, and for main itself.
-# "Build and test" and "Database checks" are required checks in the main ruleset; "Web" joins them
-# after this workflow is on main. More test levels (integration, contract, E2E) join as they arrive (#15).
+# "Build and test", "Database checks" and "Web" are required checks in the main ruleset; "Infra"
+# joins them after this workflow is on main. More test levels (integration, contract, E2E) join as they arrive (#15).
 
 on:
   pull_request:
@@ -115,6 +115,29 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  infra:
+    name: Infra
+    # Compiles and lints the Bicep templates and every parameter file. No Azure sign-in:
+    # deploying belongs to the deploy workflow (#21).
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Install Bicep
+        run: az bicep install
+
+      - name: Build and lint
+        run: |
+          az bicep build --file infra/main.bicep --stdout > /dev/null
+          az bicep lint --file infra/main.bicep
+          for params in infra/*.bicepparam; do
+            az bicep build-params --file "$params" --stdout > /dev/null
+            echo "$params builds"
+          done
 
   database:
     name: Database checks
