@@ -1,1 +1,71 @@
-// Global styles. The shared look (tokens, typography, colours) comes with the UI foundations (#78).
+// Global styles and colour tokens (#102, from the #78 mockup). Components use the tokens, never raw
+// colours. Light by default; dark follows the system unless the user picks a theme
+// (data-theme on <html>, set by ThemeService).
+:root {
+  --fg-ground: #f6f7f8;
+  --fg-surface: #ffffff;
+  --fg-ink: #1b1f24;
+  --fg-muted: #59636e;
+  --fg-line: #e3e6e9;
+  --fg-accent: #0b6b6a;
+  --fg-on-accent: #ffffff;
+  --fg-negative: #a63a24;
+  --fg-warn-bg: #fff6e0;
+  --fg-warn-ink: #6b4a00;
+  --fg-warn-line: #f0d9a0;
+  --fg-radius: 16px;
+  color-scheme: light;
+}
+
+@mixin dark {
+  --fg-ground: #14171a;
+  --fg-surface: #1c2024;
+  --fg-ink: #eef1f3;
+  --fg-muted: #a7b0b8;
+  --fg-line: #2e343a;
+  --fg-accent: #3cb7b2;
+  --fg-on-accent: #0b1415;
+  --fg-negative: #f29d8b;
+  --fg-warn-bg: #3a2e14;
+  --fg-warn-ink: #f6d58e;
+  --fg-warn-line: #5c4718;
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    @include dark;
+  }
+}
+
+:root[data-theme='dark'] {
+  @include dark;
+}
+
+body {
+  margin: 0;
+  background: var(--fg-ground);
+  color: var(--fg-ink);
+  font-family:
+    Inter,
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+a {
+  color: var(--fg-accent);
+}
+
+// Columns of amounts line up.
+.fg-amount {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.fg-negative {
+  color: var(--fg-negative);
+}
