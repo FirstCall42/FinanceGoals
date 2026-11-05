@@ -122,9 +122,11 @@ Everything the script creates is free: resource groups, managed identities, fede
 
 `infra/main.bicep` defines everything one environment runs on, and there is one parameter file per environment. Nothing is configured in the portal.
 
-| | test | production |
+**The test environment is the live one** until production exists (#86). Production's resource group, deploy identity and GitHub environment exist, but nothing is deployed there, and `infra/production.bicepparam` pins no region yet.
+
+| | test (live) | production (#86) |
 | --- | --- | --- |
-| Region | `swedencentral` | `germanywestcentral` |
+| Region | `swedencentral` | to be decided |
 | Database (free offer, auto-pause at the limit) | `financegoals-test` | `financegoals-prod` |
 | Static Web App (Free) | `eastus2` | `eastus2` |
 
@@ -137,7 +139,7 @@ az deployment group create  -g rg-financegoals-test -p infra/test.bicepparam
 
 The API runs a placeholder image until the deploy workflow (#21) supplies real images (#20). Probes call `/health/live` only; see docs/free-tier.md for why.
 
-Regions are where this subscription is allowed to create things: in 2026-11 Norway East, West Europe and North Europe refused new SQL servers, West Europe refused new Static Web Apps, and the subscription allows one Container Apps environment per region. The resource groups themselves stay in `norwayeast`; their location is only metadata.
+Regions are where this subscription is allowed to create things. In 2026-11 Norway East, West Europe and North Europe refused new SQL servers, and the free SQL offer failed in Germany West Central and France Central, working only in Sweden Central. West Europe refused new Static Web Apps, and the subscription allows one Container Apps environment per region. See docs/free-tier.md. The resource groups themselves stay in `norwayeast`; their location is only metadata.
 
 ### Cost guardrails
 

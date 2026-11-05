@@ -30,9 +30,11 @@ Test and production must cost $0 a month. This page lists the free allowances Fi
 
 This subscription can only create some things in some regions (checked 2026-11):
 
-- **Azure SQL:** Norway East, West Europe, North Europe and UK South refused new servers. Sweden Central, Germany West Central and France Central accepted.
+- **Azure SQL:** Norway East, West Europe, North Europe and UK South refused new servers. Sweden Central, Germany West Central and France Central accepted servers, but the **free offer** database failed with `InternalServerError` in Germany West Central and France Central (tracking IDs in #86) and only works in Sweden Central.
 - **Static Web Apps (Free):** West Europe refused new apps; East US 2 works. The region holds only the app's settings; the site is served globally.
-- **Container Apps:** one environment per region per subscription. Test uses Sweden Central, so production uses Germany West Central.
+- **Container Apps:** one environment per region per subscription. Test uses Sweden Central.
+
+So test, in Sweden Central, is the live environment, and production waits for #86. Upgrading to Pay-As-You-Go usually lifts Free Trial region restrictions.
 
 Keep each environment's API, migrator and database in one region: traffic between regions is billed.
 

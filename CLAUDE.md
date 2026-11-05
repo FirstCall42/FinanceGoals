@@ -74,7 +74,8 @@ Test and production run on Azure free tiers, and the monthly cost must stay at $
 
 - Every Azure resource is defined in `infra/`; never configure anything in the portal. CI compiles and lints the templates (the "Infra" check).
 - No Key Vault and no stored secrets: workloads sign in to Azure SQL and other services with their managed identities.
-- Keep each environment in one region (traffic between regions is billed): test in `swedencentral`, production in `germanywestcentral`. The subscription allows one Container Apps environment per region.
+- The test environment (`swedencentral`) is the live one until production exists (#86). Don't deploy to production before then.
+- Keep each environment in one region (traffic between regions is billed). The subscription allows one Container Apps environment per region, and on the Free Trial the free SQL offer only works in `swedencentral`.
 - `docs/free-tier.md` lists the free allowances, the limit behaviour and what is not free. Update it when adding an Azure service. Where a service lets you choose, set it to stop at the free limit, not to bill overage.
 - Uptime monitors call `GET /health/live` only, at most once an hour. Never point a monitor at `/health/ready`, which wakes the database.
 
