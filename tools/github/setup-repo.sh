@@ -143,6 +143,6 @@ echo "  1. Create a GitHub App: Settings > Developer settings > GitHub Apps > Ne
 echo "     Repository permissions: Commit statuses: Read and write. Install it on this repo only."
 echo "     gh variable set GATES_APP_ID --repo $REPO --body <App ID>"
 echo "     gh secret set GATES_APP_PRIVATE_KEY --repo $REPO --env pr-gates < <downloaded .pem>"
-echo "  2. Install the Claude GitHub App on this repo: https://github.com/apps/claude"
+echo "  2. Install the gate app on this repo (app settings > Install App > Only select repositories)."
 echo "  3. claude setup-token, then: gh secret set CLAUDE_CODE_OAUTH_TOKEN --repo $REPO --env pr-gates"
 echo "  4. Merge the PR that adds .github/workflows/pr-gates.yml."
