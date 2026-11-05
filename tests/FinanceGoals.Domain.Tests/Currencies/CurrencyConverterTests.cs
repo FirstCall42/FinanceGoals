@@ -71,10 +71,27 @@ public sealed class CurrencyConverterTests
 
         var missing = _converter.Convert(new Money(100m, _nok), _usd, beforeAnyRate).ShouldBeOfType<Conversion.RateMissing>();
 
-        missing.CurrencyCode.ShouldBe("NOK");
-        missing.Warning.ShouldBe("No exchange rate for NOK on or before 2026-10-31.");
+        missing.CurrencyCodes.ShouldBe(["NOK", "USD"]);
+        missing.Warning.ShouldBe("No exchange rate for NOK and USD on or before 2026-10-31.");
         _converter.Convert(new Money(100m, _eur), _ron, _nov5).ShouldBeOfType<Conversion.RateMissing>()
-            .CurrencyCode.ShouldBe("RON");
+            .CurrencyCodes.ShouldBe(["RON"]);
+    }
+
+    [TestMethod]
+    public void A_store_that_returns_a_later_rate_is_refused()
+    {
+        // A store bug (e.g. "<" instead of "<=", or ignoring the date) must not convert at the wrong day's rate.
+        var broken = new FixedEurRates(new EurRate("NOK", _nov5, 11.65m));
+
+        Should.Throw<InvalidOperationException>(() => new CurrencyConverter(broken).Convert(new Money(100m, _eur), _nok, _nov1));
+    }
+
+    [TestMethod]
+    public void A_store_that_returns_another_currency_is_refused()
+    {
+        var broken = new FixedEurRates(new EurRate("USD", _nov1, 1.07m));
+
+        Should.Throw<InvalidOperationException>(() => new CurrencyConverter(broken).Convert(new Money(100m, _eur), _nok, _nov5));
     }
 
     [TestMethod]
@@ -88,6 +105,30 @@ public sealed class CurrencyConverterTests
     {
         Should.Throw<ArgumentOutOfRangeException>(() => new EurRate("NOK", _nov5, 0m));
         Should.Throw<ArgumentOutOfRangeException>(() => new EurRate("NOK", _nov5, -1m));
+    }
+
+    [TestMethod]
+    [DataRow("nok")]
+    [DataRow("NOKK")]
+    [DataRow("")]
+    public void Rates_need_an_iso_code(string code)
+    {
+        Should.Throw<ArgumentException>(() => new EurRate(code, _nov5, 11.65m));
+    }
+
+    [TestMethod]
+    public void Converting_matches_the_cross_rate()
+    {
+        // NOK to USD on 5 November is amount * (1.08 / 11.65); a swapped formula would not match.
+        var amounts = Arb.From(
+            from whole in Gen.Choose(-1_000_000_000, 1_000_000_000)
+            from cents in Gen.Choose(0, 99)
+            select whole + cents / 100m);
+
+        Prop.ForAll(amounts, amount =>
+                Converted(new Money(amount, _nok), _usd, _nov5).Amount.Round()
+                    == new Money(amount * (1.08m / 11.65m), _usd).Round())
+            .QuickCheckThrowOnFailure();
     }
 
     [TestMethod]
@@ -109,6 +150,19 @@ public sealed class CurrencyConverterTests
 
     private Conversion.Converted Converted(Money amount, Currency target, DateOnly date) =>
         _converter.Convert(amount, target, date).ShouldBeOfType<Conversion.Converted>();
+
+    /// <summary>Returns the same rate whatever is asked, to test how the converter handles a broken store.</summary>
+    private sealed class FixedEurRates : IEurRates
+    {
+        private readonly EurRate _rate;
+
+        public FixedEurRates(EurRate rate)
+        {
+            _rate = rate;
+        }
+
+        public EurRate? LatestOnOrBefore(string currencyCode, DateOnly day) => _rate;
+    }
 
     private sealed class InMemoryEurRates : IEurRates
     {
