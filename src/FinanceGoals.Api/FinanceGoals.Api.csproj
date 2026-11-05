@@ -1,6 +1,26 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!-- The build writes the OpenAPI document to openapi/FinanceGoals.Api.json. It is committed,
+       so API changes show up in the pull request diff; the TypeScript client (#12) is
+       generated from it. -->
+  <PropertyGroup>
+    <OpenApiGenerateDocuments>true</OpenApiGenerateDocuments>
+    <OpenApiDocumentsDirectory>$(MSBuildProjectDirectory)/openapi</OpenApiDocumentsDirectory>
+  </PropertyGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\FinanceGoals.Application\FinanceGoals.Application.csproj" />
     <ProjectReference Include="..\FinanceGoals.Infrastructure\FinanceGoals.Infrastructure.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <PackageReference Include="Microsoft.Extensions.ApiDescription.Server" PrivateAssets="all" />
+    <PackageReference Include="Serilog.AspNetCore" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="FinanceGoals.Api.Tests" />
+  </ItemGroup>
+
 </Project>
