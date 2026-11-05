@@ -42,7 +42,8 @@ dotnet test
 
 - Schema changes are T-SQL scripts applied by DbUp, never EF Core migrations.
 - Every script is guarded and idempotent, so a second run changes nothing.
-- Never edit a migration script once it is merged. Add a new script instead.
+- Never edit, rename or delete a migration or seed script once it is merged. Add a new script instead. Repeatable scripts (`db/repeatable`) may change; they run every time.
+- CI enforces this: the "Database checks" job fails on a changed merged script, and requires a database upgraded from main to match a fresh build. Tests must also re-run every script without the journal (see `Migrations_and_seeds_are_guarded_against_running_again`).
 
 ## Money
 

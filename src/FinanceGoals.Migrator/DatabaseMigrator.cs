@@ -16,12 +16,28 @@ namespace FinanceGoals.Migrator;
 /// </summary>
 internal sealed class DatabaseMigrator
 {
-    // Creates the user if missing; for a password user, sets the configured password every run
-    // so rotating it in configuration takes effect. Adding an existing member is a no-op.
+    // Refuses any principal that is, or could be, more than a data user, so a configuration
+    // mistake (e.g. naming the schema owner) fails instead of granting or resetting it.
+    // Then creates the user if missing; for a password user, sets the configured password every
+    // run so rotating it in configuration takes effect. Adding an existing member is a no-op.
     private const string _ensureAppUserSql = """
         DECLARE @sql nvarchar(max);
+        DECLARE @id int = DATABASE_PRINCIPAL_ID(@name);
 
-        IF DATABASE_PRINCIPAL_ID(@name) IS NULL
+        IF @name IN (N'dbo', N'guest', N'sys', N'INFORMATION_SCHEMA', N'public') OR @name = USER_NAME()
+            THROW 50001, N'The app user must be a dedicated user, not dbo, guest, a system user or the schema owner.', 1;
+
+        IF @id IS NOT NULL AND (SELECT type FROM sys.database_principals WHERE principal_id = @id) NOT IN ('S', 'E', 'X')
+            THROW 50002, N'The app user name belongs to a role or another kind of principal, not a user.', 1;
+
+        IF EXISTS (SELECT 1 FROM sys.database_role_members AS rm
+                   JOIN sys.database_principals AS r ON r.principal_id = rm.role_principal_id
+                   WHERE rm.member_principal_id = @id AND r.name <> N'app_data')
+           OR EXISTS (SELECT 1 FROM sys.database_permissions
+                      WHERE grantee_principal_id = @id AND NOT (class = 0 AND permission_name = N'CONNECT'))
+            THROW 50003, N'The app user already has other roles or permissions; it may only be a member of app_data.', 1;
+
+        IF @id IS NULL
             SET @sql = N'CREATE USER ' + QUOTENAME(@name) +
                 CASE WHEN @password IS NULL THEN N' FROM EXTERNAL PROVIDER'
                      ELSE N' WITH PASSWORD = ' + QUOTENAME(@password, N'''') END;

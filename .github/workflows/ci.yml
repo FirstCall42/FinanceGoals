@@ -1,7 +1,7 @@
 name: CI
 
 # Build, format and test checks for every pull request to main, and for main itself.
-# The "Build and test" job is a required check in the main ruleset. More test levels
+# "Build and test" and "Database checks" are required checks in the main ruleset. More test levels
 # (integration, database, web, contract, E2E) join this workflow as they arrive (#15).
 
 on:
@@ -82,3 +82,48 @@ jobs:
           name: coverage
           path: "**/TestResults/*.cobertura.xml"
           if-no-files-found: warn
+
+  database:
+    name: Database checks
+    # Compares the PR with its base; on main itself there is nothing to compare against.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DOTNET_NOLOGO: "true"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "true"
+      BASE_SHA: ${{ github.event.pull_request.base.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Merged migration and seed scripts are unchanged
+        run: |
+          # New scripts are fine. Changing, renaming or deleting one that is already on main is
+          # not: databases that ran it would never see the change. Repeatable scripts may change.
+          changed=$(git diff --name-status --diff-filter=MDRT "$BASE_SHA"...HEAD -- db/migrations db/seed)
+          if [ -n "$changed" ]; then
+            echo "::error::Merged migration or seed scripts were changed. Add a new script instead."
+            echo "$changed"
+            exit 1
+          fi
+          echo "No merged migration or seed script changed."
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Build the base branch's migrator
+        run: |
+          git worktree add "$RUNNER_TEMP/base" "$BASE_SHA"
+          dotnet build "$RUNNER_TEMP/base/src/FinanceGoals.Migrator" --configuration Release --output "$RUNNER_TEMP/base-migrator"
+
+      - name: Upgrade from the base matches a fresh build
+        env:
+          FINANCEGOALS_BASE_MIGRATOR: ${{ runner.temp }}/base-migrator/FinanceGoals.Migrator.dll
+          FINANCEGOALS_REQUIRE_UPGRADE_CHECK: "1"
+        run: >-
+          dotnet test --project tests/FinanceGoals.Migrator.Tests --configuration Release
+          -- --filter "FullyQualifiedName~UpgradePathTests"
