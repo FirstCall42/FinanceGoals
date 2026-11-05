@@ -81,7 +81,7 @@ Test and production run on Azure free tiers, and the monthly cost must stay at $
 
 ## Review and merge
 
-- Before opening a PR, run the `pr-reviewer` agent (`.claude/agents/pr-reviewer.md`) on the branch and fix its blocking findings.
+- Before opening a PR, ask the owner whether to run the `pr-reviewer` agent (`.claude/agents/pr-reviewer.md`) locally on the branch, and recommend one way. Recommend running it for database scripts, security, money logic or larger changes, and skipping it for small or docs-only changes. Don't run it without asking. If it runs, fix its blocking findings before opening the PR. The AI review check runs on every PR either way.
 - After opening a PR, turn on auto-merge: `gh pr merge <n> --auto --squash`. GitHub merges once every required check passes. Never merge by hand or bypass a check.
 - The `PR gates` workflow posts two required statuses through a dedicated GitHub App. The ruleset accepts them only from that app. **AI review** is the same reviewer, run from main's copy of the workflow. **Human approval** fails when a PR touches the review system itself (`.github/`, `tools/github/`, and at any depth `.claude/`, `CLAUDE.md` or `.gitattributes`) until the owner adds the `human-approved` label. Database scripts, infrastructure and build settings rely on AI review alone, so hold them to the highest standard and call out data-loss or cost risk in the PR description.
 - Never add a workflow or step that posts commit statuses or touches the `pr-gates` environment.
