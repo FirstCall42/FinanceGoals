@@ -169,7 +169,7 @@ jobs:
               then the findings (blocking first), then the issue's "Done when" items with the
               evidence for each. The workflow posts it on the PR.
           claude_args: |
-            --model claude-fable-5-1
+            --model claude-opus-5-5
             --max-turns 60
             --allowedTools "Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh issue view:*),mcp__github_inline_comment__create_inline_comment"
             --disallowedTools "Read(./.git/**),Read(//home/runner/work/_temp/**),Read(//home/runner/.*/**),Read(//proc/**),Read(//root/**),Read(//tmp/**),Read(//etc/**),Read(//run/**),Read(//var/**),Read(//opt/**)"
