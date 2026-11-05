@@ -11,6 +11,7 @@
     <Project Path="tests/FinanceGoals.Application.Tests/FinanceGoals.Application.Tests.csproj" />
     <Project Path="tests/FinanceGoals.Architecture.Tests/FinanceGoals.Architecture.Tests.csproj" />
     <Project Path="tests/FinanceGoals.Domain.Tests/FinanceGoals.Domain.Tests.csproj" />
+    <Project Path="tests/FinanceGoals.Infrastructure.Tests/FinanceGoals.Infrastructure.Tests.csproj" />
     <Project Path="tests/FinanceGoals.Migrator.Tests/FinanceGoals.Migrator.Tests.csproj" />
   </Folder>
 </Solution>

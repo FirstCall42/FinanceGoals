@@ -32,6 +32,8 @@ internal sealed class ApiFactory : WebApplicationFactory<Program>
     {
         builder.UseEnvironment(_environment);
         builder.UseSetting("ConnectionStrings:App", _connectionString ?? string.Empty);
+        // Tests never call the real ECB feed.
+        builder.UseSetting(ExchangeRateImportService.EnabledSetting, "false");
         foreach (var (key, value) in _settings)
         {
             builder.UseSetting(key, value);
