@@ -1,0 +1,65 @@
+name: Azure sign-in check
+
+# Run by hand from main after tools/azure/setup-github-oidc.sh. Proves that each environment's
+# job signs in to Azure with OpenID Connect (no stored secret) and that it reaches only its own
+# resource group. Deploy workflows (#21) sign in the same way.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sign-in:
+    name: Sign in (${{ matrix.environment }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: ${{ matrix.environment }}
+    permissions:
+      contents: read
+      id-token: write # lets the job request a GitHub OIDC token; nothing else
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - environment: test
+            other: rg-financegoals-prod
+          - environment: production
+            other: rg-financegoals-test
+    steps:
+      - name: Sign in to Azure with OIDC
+        uses: azure/login@v3
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Reaches its own resource group
+        env:
+          OWN: ${{ vars.AZURE_RESOURCE_GROUP }}
+        run: az group show --name "$OWN" --query name --output tsv
+
+      # On its own this step would also pass if the other group did not exist; the next step
+      # (exactly one visible group) is what proves the scope.
+      - name: Cannot reach the other environment
+        env:
+          OWN: ${{ vars.AZURE_RESOURCE_GROUP }}
+          OTHER: ${{ matrix.other }}
+        run: |
+          if az group show --name "$OTHER" --output none 2>/dev/null; then
+            echo "::error::This identity can read $OTHER; it must only reach $OWN."
+            exit 1
+          fi
+          echo "No access to $OTHER, as intended."
+
+      - name: Sees no other resource group
+        env:
+          OWN: ${{ vars.AZURE_RESOURCE_GROUP }}
+        run: |
+          visible=$(az group list --query "[].name" --output tsv)
+          echo "Visible resource groups: $visible"
+          if [ "$visible" != "$OWN" ]; then
+            echo "::error::Expected to see only $OWN."
+            exit 1
+          fi
