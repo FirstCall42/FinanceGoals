@@ -33,7 +33,8 @@ dotnet test
 
 ## Tests
 
-- MSTest on Microsoft.Testing.Platform. Use NSubstitute for mocks. Don't use xUnit, NUnit or Moq.
+- MSTest on Microsoft.Testing.Platform. Use NSubstitute for mocks and Shouldly for assertions. Don't use xUnit, NUnit, Moq or FluentAssertions.
+- `tests/FinanceGoals.Architecture.Tests` enforces the layer rules and the no-primary-constructors rule. CI (`.github/workflows/ci.yml`) runs build, format and tests on every PR as the required "Build and test" check.
 - Test method names use underscores, e.g. `Add_rejects_different_currencies`.
 - Integration tests run against SQL Server in Testcontainers, migrated by the real DbUp scripts. Never use an Azure database in tests.
 
