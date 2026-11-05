@@ -72,7 +72,7 @@ npm run build
 Test and production run on Azure free tiers, and the monthly cost must stay at $0. Flag anything that could incur a charge.
 
 - GitHub Actions signs in to Azure with OpenID Connect (`azure/login` with `vars.AZURE_CLIENT_ID`, `vars.AZURE_TENANT_ID` and `vars.AZURE_SUBSCRIPTION_ID`). Never store an Azure password, secret or certificate in GitHub.
-- A job reaches Azure only through the `test` or `production` GitHub environment, and gets only `id-token: write` on top of what it already needs. Each environment identity is Contributor on its own resource group and nothing more. Grant anything extra in `tools/azure/setup-github-oidc.sh`, with a reason, never in the portal.
+- A job reaches Azure only through the `test` or `production` GitHub environment, and gets only `id-token: write` on top of what it already needs. Only workflows triggered by `push` to main or `workflow_dispatch` may use these environments. Never use them from `pull_request_target` or `workflow_run`: those runs count as main but handle code or input from a pull request. Each environment identity is Contributor on its own resource group and nothing more. Grant anything extra in `tools/azure/setup-github-oidc.sh`, with a reason, never in the portal.
 
 ## Workflow
 

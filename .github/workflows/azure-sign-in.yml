@@ -40,6 +40,8 @@ jobs:
           OWN: ${{ vars.AZURE_RESOURCE_GROUP }}
         run: az group show --name "$OWN" --query name --output tsv
 
+      # On its own this step would also pass if the other group did not exist; the next step
+      # (exactly one visible group) is what proves the scope.
       - name: Cannot reach the other environment
         env:
           OWN: ${{ vars.AZURE_RESOURCE_GROUP }}

@@ -104,7 +104,7 @@ GitHub Actions signs in to Azure with OpenID Connect, so no Azure password, secr
 | `test` | `id-financegoals-deploy-test` | Contributor on `rg-financegoals-test` only |
 | `production` | `id-financegoals-deploy-production` | Contributor on `rg-financegoals-prod` only |
 
-Each identity trusts only jobs running in its GitHub environment, and both environments are deployable from `main` only. Neither identity can change access, touch the other environment, or see the rest of the subscription.
+Each identity trusts only jobs running in its GitHub environment. The federated credential subject is `<prefix>:environment:<env>`, where the prefix is read from the repository. This repository uses GitHub immutable subjects, `repo:FirstCall42@<id>/FinanceGoals@<id>`. Both environments are deployable from exactly `main`. The script locks each environment before Azure trusts it, and stops if an environment allows any other branch. Neither identity can change access, touch the other environment, or see the rest of the subscription.
 
 Set it up once, and again whenever the script changes (it is idempotent):
 
