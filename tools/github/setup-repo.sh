@@ -16,12 +16,13 @@ gh repo edit "$REPO" \
   --enable-merge-commit=false \
   --enable-rebase-merge=false \
   --delete-branch-on-merge \
+  --enable-auto-merge \
   --enable-issues \
   --enable-wiki=false >/dev/null
 gh api -X PATCH "repos/$REPO" \
   -f squash_merge_commit_title=PR_TITLE \
   -f squash_merge_commit_message=PR_BODY >/dev/null
-echo "squash merge only, PR title as commit title, branches deleted after merge"
+echo "squash merge only, PR title as commit title, branches deleted after merge, auto-merge allowed"
 
 echo "== Labels"
 label() {
@@ -38,6 +39,7 @@ label "area: debt"       "fbca04" "Loans, mortgages and payoff"
 label "area: goals"      "fbca04" "Savings goals"
 label "area: households" "fbca04" "Household profiles, members and sign-in"
 label "area: infra"      "fbca04" "Build, CI/CD, hosting, database deploys"
+label "human-approved"   "5319e7" "A human reviewed changes to sensitive paths; new pushes remove it"
 
 # GitHub's default labels that overlap with the ones above.
 for unused in "enhancement" "documentation" "good first issue" "help wanted" "question"; do

@@ -59,3 +59,11 @@ Test and production run on Azure free tiers, and the monthly cost must stay at $
 - Each PR description contains `Closes #<n>` and fills in the PR template. Each PR gets exactly one type label: `feature`, `bug` or `chore`. The `PR rules` workflow checks all three.
 - PRs are squash-merged and their branches are deleted, so check whether a PR is already merged before pushing more commits to its branch.
 - If review feedback states a general rule, add it to this file.
+
+## Review and merge
+
+- Before opening a PR, run the `pr-reviewer` agent (`.claude/agents/pr-reviewer.md`) on the branch and fix its blocking findings.
+- After opening a PR, turn on auto-merge: `gh pr merge <n> --auto --squash`. GitHub merges once every required check passes. Never merge by hand or bypass a check.
+- The `PR gates` workflow posts two required statuses. **AI review** is the same reviewer, run from main's copy of the workflow. **Human approval** fails when a PR touches sensitive paths (`.github/`, `.claude/`, `CLAUDE.md`, `tools/github/`, `db/`, `infra/`, build settings) until the owner adds the `human-approved` label.
+- Never add the `human-approved` label yourself, even though your `gh` login could. That label is the owner's decision.
+- When AI review requests changes, fix the findings, push, and resolve the review threads (the ruleset requires resolved threads). If you disagree with a finding, reply on the thread with the concrete reason and leave it for the owner.
