@@ -44,7 +44,8 @@ public sealed class SchemaSnapshotTests
     [DataRow("REVOKE SELECT ON app.Account FROM reader; GRANT SELECT ON other.Account TO reader;")]
     [DataRow("CREATE USER extra WITHOUT LOGIN;")]
     // Data and journals
-    [DataRow("UPDATE app.Currency SET Name = N'Norsk krone' WHERE Code = 'NOK';")]
+    // Case only: the snapshot must see a change a case-insensitive comparison would miss.
+    [DataRow("UPDATE app.Currency SET Name = N'Norwegian KRONE' WHERE Code = 'NOK';")]
     [DataRow("DELETE FROM app.Currency WHERE Code = 'RON';")]
     [DataRow("UPDATE app.Pair SET Note = 'x ';")]
     [DataRow("UPDATE app.Pair SET Doc = N'<a>2</a>';")]

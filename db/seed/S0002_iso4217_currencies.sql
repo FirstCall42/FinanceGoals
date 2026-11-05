@@ -1,6 +1,7 @@
 -- Every ISO 4217 currency with its numeric code, minor units and name, from ISO 4217 list one
 -- as published by SIX on 2026-09-17 (https://www.six-group.com/en/products-services/financial-information/data-standards.html).
--- Codes without minor units (precious metals, SDR, test and fund codes) are left out.
+-- Codes without minor units (precious metals, SDR, bond-market units, XSU, XUA, XTS, XXX) are left
+-- out; fund codes such as CLF and USN are kept. Names are as published, with surrounding spaces trimmed.
 -- An upsert: it adds missing currencies and corrects existing ones, including the names
 -- S0001 inserted. It never deletes, because accounts may refer to a currency. Running it again
 -- changes nothing.
