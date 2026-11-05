@@ -21,6 +21,10 @@
 # Cost: resource groups, managed identities, federated credentials and role assignments are free.
 set -euo pipefail
 
+# Git Bash on Windows rewrites arguments that start with / (e.g. the role scope
+# /subscriptions/...) into Windows paths. Turn that off; it has no effect elsewhere.
+export MSYS_NO_PATHCONV=1
+
 REPO=""
 LOCATION="norwayeast"
 DRY_RUN=""
