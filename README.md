@@ -49,6 +49,9 @@ Every script runs in its own transaction. Running the migrator again changes not
 | --- | --- |
 | `ConnectionStrings__SchemaOwner` | Schema owner connection string (required) |
 | `Migrator__AppUser` | App user to create and grant `app_data` (optional) |
-| `Migrator__AppUserPassword` | Its password, for a contained user; leave unset for an Entra ID user (Azure managed identity) |
+| `Migrator__AppUserKind` | `password` (contained user) or `entra` (Entra ID user, e.g. the API's managed identity); required with `Migrator__AppUser` |
+| `Migrator__AppUserPassword` | Its password, for kind `password` only. Set on every run, so rotating it here takes effect |
 
 Locally the database must be contained (`CONTAINMENT = PARTIAL`) so users can have passwords; Docker Compose (#13) will set that up. The migrator tests do the same against SQL Server in Docker, so Docker must be running for `dotnet test`.
+
+On Azure SQL, creating an `entra` app user requires the migrator to sign in as an Entra principal (not a SQL user), and the server needs permission to look up Entra names. The deployment issues (#17, #19) cover this.

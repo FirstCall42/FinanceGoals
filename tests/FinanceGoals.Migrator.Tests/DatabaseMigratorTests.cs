@@ -23,8 +23,9 @@ public sealed class DatabaseMigratorTests
             JOIN sys.database_principals AS r ON r.principal_id = rm.role_principal_id
             JOIN sys.database_principals AS m ON m.principal_id = rm.member_principal_id
             UNION ALL
-            SELECT CONCAT('permission|', USER_NAME(dp.grantee_principal_id), '|', dp.permission_name, '|', dp.class_desc, ':', SCHEMA_NAME(dp.major_id))
-            FROM sys.database_permissions AS dp WHERE dp.class = 3
+            SELECT CONCAT('permission|', USER_NAME(dp.grantee_principal_id), '|', dp.permission_name, '|', dp.state_desc, '|',
+                dp.class_desc, ':', CASE dp.class WHEN 3 THEN SCHEMA_NAME(dp.major_id) WHEN 1 THEN OBJECT_NAME(dp.major_id) END)
+            FROM sys.database_permissions AS dp WHERE dp.grantee_principal_id > 4
             UNION ALL
             SELECT CONCAT('journal|SchemaVersions|', ScriptName) FROM dbo.SchemaVersions
             UNION ALL
@@ -59,7 +60,7 @@ public sealed class DatabaseMigratorTests
         migrator.Run(appUser);
         var before = await SqlServer.QueryAsync(database, _snapshotSql);
         before.ShouldContain("member|app_data|financegoals_app");
-        before.ShouldContain("permission|app_data|SELECT|SCHEMA:app");
+        before.ShouldContain("permission|app_data|SELECT|GRANT|SCHEMA:app");
         before.ShouldContain("journal|SeedVersions|seed/S0001_household_currencies.sql");
         before.ShouldContain("currency|NOK|578|2|Norwegian krone");
 
@@ -68,6 +69,62 @@ public sealed class DatabaseMigratorTests
         second.Migrations.ShouldBeEmpty();
         second.Seeds.ShouldBeEmpty();
         (await SqlServer.QueryAsync(database, _snapshotSql)).ShouldBe(before);
+    }
+
+    [TestMethod]
+    public async Task Migrations_and_seeds_are_guarded_against_running_again()
+    {
+        // The journal normally stops a script from running twice. If the journal is lost or a
+        // script is renamed, the script's own guards must make a second run change nothing.
+        var database = await SqlServer.CreateDatabaseAsync();
+        new DatabaseMigrator(database, TextWriter.Null).Run(AppUser.WithPassword("financegoals_app", SqlServer.NewPassword()));
+        var before = await SqlServer.QueryAsync(database, _snapshotSql);
+
+        var rerun = DbUp.DeployChanges.To
+            .SqlDatabase(database)
+            .WithScriptsEmbeddedInAssembly(
+                typeof(DatabaseMigrator).Assembly,
+                name => name.StartsWith(DatabaseMigrator.Folder.Migrations, StringComparison.Ordinal)
+                    || name.StartsWith(DatabaseMigrator.Folder.Seed, StringComparison.Ordinal))
+            .JournalTo(new DbUp.Helpers.NullJournal())
+            .WithTransactionPerScript()
+            .WithVariablesDisabled()
+            .LogToNowhere()
+            .Build()
+            .PerformUpgrade();
+
+        rerun.Successful.ShouldBeTrue(rerun.Error?.Message);
+        rerun.Scripts.Count().ShouldBe(
+            new DatabaseMigrator(database, TextWriter.Null).EmbeddedScripts(DatabaseMigrator.Folder.Migrations).Count
+            + new DatabaseMigrator(database, TextWriter.Null).EmbeddedScripts(DatabaseMigrator.Folder.Seed).Count);
+        (await SqlServer.QueryAsync(database, _snapshotSql)).ShouldBe(before);
+    }
+
+    [TestMethod]
+    public async Task Rotating_the_app_user_password_takes_effect()
+    {
+        var database = await SqlServer.CreateDatabaseAsync();
+        var migrator = new DatabaseMigrator(database, TextWriter.Null);
+        migrator.Run(AppUser.WithPassword("financegoals_app", SqlServer.NewPassword()));
+        var rotated = SqlServer.NewPassword();
+
+        migrator.Run(AppUser.WithPassword("financegoals_app", rotated));
+
+        (await SqlServer.QueryAsync(SqlServer.As(database, "financegoals_app", rotated), "SELECT COUNT(*) FROM app.Currency"))
+            .ShouldBe(["4"]);
+    }
+
+    [TestMethod]
+    public async Task App_data_role_has_no_database_level_permissions()
+    {
+        var database = await SqlServer.CreateDatabaseAsync();
+        new DatabaseMigrator(database, TextWriter.Null).Run(appUser: null);
+
+        (await SqlServer.QueryAsync(database, """
+            SELECT CONCAT(class_desc, ' ', permission_name)
+            FROM sys.database_permissions
+            WHERE grantee_principal_id = DATABASE_PRINCIPAL_ID(N'app_data') AND class <> 3
+            """)).ShouldBeEmpty();
     }
 
     [TestMethod]

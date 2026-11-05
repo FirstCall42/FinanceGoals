@@ -48,9 +48,35 @@ public sealed partial class ScriptConventionTests
     [DataRow("app]; DROP USER dbo; --")]
     [DataRow("1app")]
     [DataRow("app user")]
+    [DataRow("financegoals_app\n")]
     public void App_user_rejects_names_that_are_not_plain_identifiers(string name)
     {
         Should.Throw<ArgumentException>(() => AppUser.FromExternalProvider(name));
+    }
+
+    [TestMethod]
+    public void Settings_without_an_app_user_create_none()
+    {
+        AppUser.FromSettings(null, "password", "secret").ShouldBeNull();
+        AppUser.FromSettings(" ", null, null).ShouldBeNull();
+    }
+
+    [TestMethod]
+    public void Settings_build_the_requested_kind_of_app_user()
+    {
+        AppUser.FromSettings("financegoals_app", "password", "Pw1!x").ShouldNotBeNull().Password.ShouldBe("Pw1!x");
+        AppUser.FromSettings("financegoals-api", "Entra", null).ShouldNotBeNull().Password.ShouldBeNull();
+    }
+
+    [TestMethod]
+    [DataRow(null, "Pw1!x")]
+    [DataRow("sql", "Pw1!x")]
+    [DataRow("password", null)]
+    [DataRow("password", "")]
+    [DataRow("entra", "Pw1!x")]
+    public void Settings_that_are_missing_or_contradictory_are_rejected(string? kind, string? password)
+    {
+        Should.Throw<ArgumentException>(() => AppUser.FromSettings("financegoals_app", kind, password));
     }
 
     [TestMethod]

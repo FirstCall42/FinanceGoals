@@ -4,7 +4,9 @@ using Microsoft.Extensions.Configuration;
 // Configuration, from environment variables or --key=value arguments:
 //   ConnectionStrings__SchemaOwner   connection string of the schema owner (required)
 //   Migrator__AppUser                app user to create and add to app_data (optional)
-//   Migrator__AppUserPassword        its password; leave unset for an Entra ID user
+//   Migrator__AppUserKind            "password" (contained user) or "entra" (Entra ID user);
+//                                    required with Migrator__AppUser
+//   Migrator__AppUserPassword        its password, for kind "password" only
 var configuration = new ConfigurationBuilder()
     .AddEnvironmentVariables()
     .AddCommandLine(args)
@@ -17,14 +19,12 @@ if (string.IsNullOrWhiteSpace(connectionString))
     return 2;
 }
 
-var appUserName = configuration["Migrator:AppUser"];
-var appUserPassword = configuration["Migrator:AppUserPassword"];
-
 try
 {
-    AppUser? appUser = string.IsNullOrWhiteSpace(appUserName) ? null
-        : string.IsNullOrEmpty(appUserPassword) ? AppUser.FromExternalProvider(appUserName)
-        : AppUser.WithPassword(appUserName, appUserPassword);
+    var appUser = AppUser.FromSettings(
+        configuration["Migrator:AppUser"],
+        configuration["Migrator:AppUserKind"],
+        configuration["Migrator:AppUserPassword"]);
 
     var result = new DatabaseMigrator(connectionString, Console.Out).Run(appUser);
     Console.WriteLine(

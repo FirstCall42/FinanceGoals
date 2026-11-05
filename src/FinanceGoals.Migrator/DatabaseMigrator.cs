@@ -16,20 +16,23 @@ namespace FinanceGoals.Migrator;
 /// </summary>
 internal sealed class DatabaseMigrator
 {
+    // Creates the user if missing; for a password user, sets the configured password every run
+    // so rotating it in configuration takes effect. Adding an existing member is a no-op.
     private const string _ensureAppUserSql = """
+        DECLARE @sql nvarchar(max);
+
         IF DATABASE_PRINCIPAL_ID(@name) IS NULL
-        BEGIN
-            DECLARE @create nvarchar(max) = N'CREATE USER ' + QUOTENAME(@name) +
+            SET @sql = N'CREATE USER ' + QUOTENAME(@name) +
                 CASE WHEN @password IS NULL THEN N' FROM EXTERNAL PROVIDER'
                      ELSE N' WITH PASSWORD = ' + QUOTENAME(@password, N'''') END;
-            EXEC (@create);
-        END;
+        ELSE IF @password IS NOT NULL
+            SET @sql = N'ALTER USER ' + QUOTENAME(@name) + N' WITH PASSWORD = ' + QUOTENAME(@password, N'''');
 
-        IF IS_ROLEMEMBER(N'app_data', @name) = 0
-        BEGIN
-            DECLARE @add nvarchar(max) = N'ALTER ROLE app_data ADD MEMBER ' + QUOTENAME(@name);
-            EXEC (@add);
-        END;
+        IF @sql IS NOT NULL
+            EXEC (@sql);
+
+        SET @sql = N'ALTER ROLE app_data ADD MEMBER ' + QUOTENAME(@name);
+        EXEC (@sql);
         """;
 
     private readonly string _connectionString;
