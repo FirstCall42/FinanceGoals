@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="NetArchTest.Rules" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
+  </ItemGroup>
+
+  <!-- Every production project, so the layer rules can load and inspect each assembly. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\FinanceGoals.Domain\FinanceGoals.Domain.csproj" />
+    <ProjectReference Include="..\..\src\FinanceGoals.Application\FinanceGoals.Application.csproj" />
+    <ProjectReference Include="..\..\src\FinanceGoals.Infrastructure\FinanceGoals.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\FinanceGoals.Api\FinanceGoals.Api.csproj" />
+    <ProjectReference Include="..\..\src\FinanceGoals.Migrator\FinanceGoals.Migrator.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -10,16 +10,20 @@
     <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
     <!-- Test method names use underscores, e.g. Add_rejects_different_currencies. -->
     <NoWarn>$(NoWarn);CA1707</NoWarn>
+    <!-- Every dotnet test run writes Cobertura coverage to TestResults/<project>.cobertura.xml. -->
+    <TestingPlatformCommandLineArguments>$(TestingPlatformCommandLineArguments) --coverage --coverage-output-format cobertura --coverage-output $(MSBuildProjectName).cobertura.xml</TestingPlatformCommandLineArguments>
   </PropertyGroup>
 
   <ItemGroup>
     <Using Include="Microsoft.VisualStudio.TestTools.UnitTesting" />
     <Using Include="NSubstitute" />
+    <Using Include="Shouldly" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="MSTest" />
     <PackageReference Include="NSubstitute" />
     <PackageReference Include="NSubstitute.Analyzers.CSharp" PrivateAssets="all" />
+    <PackageReference Include="Shouldly" />
   </ItemGroup>
 </Project>

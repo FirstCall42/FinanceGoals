@@ -14,7 +14,7 @@ Requires the .NET 10 SDK (pinned in `global.json`).
 ```sh
 dotnet build
 dotnet format --verify-no-changes
-dotnet test
+dotnet test          # also writes coverage to TestResults/<project>.cobertura.xml
 ```
 
 ## Layout
@@ -26,6 +26,7 @@ dotnet test
 | `src/FinanceGoals.Infrastructure` | EF Core, external services; references Application |
 | `src/FinanceGoals.Api` | ASP.NET Core Minimal API; references Application and Infrastructure |
 | `src/FinanceGoals.Migrator` | DbUp console app that applies the database scripts |
-| `tests/*` | Test projects: MSTest on Microsoft.Testing.Platform, NSubstitute for mocks |
+| `tests/*` | Test projects: MSTest on Microsoft.Testing.Platform, NSubstitute for mocks, Shouldly for assertions |
+| `tests/FinanceGoals.Architecture.Tests` | Layer dependency rules (NetArchTest and project references) and the no-primary-constructors check |
 
 Shared build settings live in `Directory.Build.props`, and every NuGet version lives in `Directory.Packages.props`.
