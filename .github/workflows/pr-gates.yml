@@ -7,8 +7,9 @@ name: PR gates
 #   allows only main. Workflows a PR adds or edits, and PRs based on other branches, get none.
 # - Statuses are posted with the gate app's token, and the main ruleset accepts "AI review" and
 #   "Human approval" only from that app (integration_id), so no other workflow can forge them.
-# - The reviewer cannot run code: its only shell commands are read-only gh queries, and the
-#   gate token is minted in a later job that never runs Claude. A prompt injected through the
+# - The reviewer cannot run code: its only shell commands are read-only gh queries, it cannot
+#   read outside the workspace or inside .git (where the action keeps a token), and the gate
+#   token is minted in a later job that never runs Claude. A prompt injected through the
 #   PR can at worst produce a wrong verdict, and wrong approvals are what the human gate and
 #   the owner's review of sensitive paths are for.
 # - Nothing from the PR is built or executed. The reviewer reads a copy of the PR's files in
@@ -52,15 +53,25 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           APP_TOKEN: ${{ steps.app.outputs.token }}
           ACTION: ${{ github.event.action }}
+          OWNER: ${{ github.repository_owner }}
         run: |
           # Paths that control the checks, the reviewer, the build, the database or the cloud,
           # at any depth where tools pick them up from subdirectories.
-          sensitive='^(\.github/|tools/github/|db/|infra/|global\.json$|\.editorconfig$|\.gitattributes$)|(^|/)(\.claude/|CLAUDE(\.local)?\.md$|Directory\.Build\.(props|targets)$|[Nn]u[Gg]et\.[Cc]onfig$)'
+          sensitive='^(\.github/|tools/github/|db/|infra/|global\.json$|\.editorconfig$)|(^|/)(\.claude/|CLAUDE(\.local)?\.md$|Directory\.Build\.(props|targets)$|[Nn]u[Gg]et\.[Cc]onfig$|\.gitattributes$)'
 
           hits=$(gh api "repos/$REPO/pulls/$PR/files" --paginate \
                    --jq '.[] | .filename, (.previous_filename // empty)' | grep -E "$sensitive" | sort -u || true)
 
           labeled=$(gh api "repos/$REPO/issues/$PR/labels" --jq '[.[].name] | index("human-approved") != null')
+          if [ "$labeled" = "true" ]; then
+            # Only the owner's own label counts, not one added by an app, bot or other account.
+            by=$(gh api "repos/$REPO/issues/$PR/events" --paginate \
+                   --jq '.[] | select(.event == "labeled" and .label.name == "human-approved") | .actor.login + " " + .actor.type' | tail -n1)
+            if [ "$by" != "$OWNER User" ]; then
+              echo "human-approved was added by '$by', not the owner; ignoring it."
+              labeled=false
+            fi
+          fi
           if [ "$ACTION" = "synchronize" ] && [ "$labeled" = "true" ]; then
             # New commits need a fresh human look.
             gh api -X DELETE "repos/$REPO/issues/$PR/labels/human-approved" >/dev/null
@@ -115,7 +126,8 @@ jobs:
           git fetch --no-tags --depth=1 origin "+refs/pull/$PR/head:refs/remotes/pr/head"
           [ "$(git rev-parse refs/remotes/pr/head)" = "$HEAD_SHA" ] || { echo "PR head moved; a newer run will review it."; exit 1; }
           mkdir .pr-under-review
-          git archive --format=tar "$HEAD_SHA" | tar -x -C .pr-under-review
+          # attr.tree: use main's .gitattributes, so the PR cannot hide files with export-ignore.
+          git -c attr.tree=HEAD archive --format=tar "$HEAD_SHA" | tar -x -C .pr-under-review
           # Nothing in the copy may point outside it or be loaded as instructions.
           find .pr-under-review -type l -print -delete
           find .pr-under-review -depth \( -name CLAUDE.md -o -name CLAUDE.local.md -o -name .claude -o -name .mcp.json \) \
@@ -152,16 +164,19 @@ jobs:
           claude_args: |
             --model claude-fable-5-1
             --max-turns 60
-            --allowedTools "Read,Grep,Glob,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh issue view:*),mcp__github_inline_comment__create_inline_comment"
+            --allowedTools "Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh issue view:*),mcp__github_inline_comment__create_inline_comment"
+            --disallowedTools "Read(./.git/**),Grep(./.git/**),Glob(./.git/**),Read(//proc/**),Grep(//proc/**),Read(//root/**),Read(//tmp/**),Read(//etc/**),Read(//run/**),Read(//var/**),Read(//opt/**)"
             --json-schema '{"type":"object","properties":{"verdict":{"type":"string","enum":["approve","request_changes"]},"blocking":{"type":"integer","minimum":0},"summary":{"type":"string"}},"required":["verdict","blocking","summary"]}'
 
       - name: Post the review summary
         if: steps.review.outcome == 'success'
+        # The verdict, not the comment, decides the status.
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
           RESULT: ${{ steps.review.outputs.structured_output }}
         run: |
-          printf '%s' "$RESULT" | jq -r '.summary // "AI review returned no summary."' > "$RUNNER_TEMP/summary.md"
+          printf '%s' "$RESULT" | jq -r '.summary // "AI review returned no summary."' | head -c 60000 > "$RUNNER_TEMP/summary.md"
           gh pr comment "$PR" --repo "$REPO" --body-file "$RUNNER_TEMP/summary.md"
 
   ai-review-status:
