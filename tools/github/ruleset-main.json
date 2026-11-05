@@ -33,7 +33,6 @@
           { "context": "Infra", "integration_id": 15368 },
           { "context": "Images", "integration_id": 15368 },
           { "context": "Type label" },
-          { "context": "Human approval", "integration_id": "__GATES_APP_ID__" },
           { "context": "AI review", "integration_id": "__GATES_APP_ID__" }
         ]
       }
