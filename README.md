@@ -45,7 +45,7 @@ The migrator connects as the **schema owner** (a `db_owner` user) and:
 
 Every script runs in its own transaction. Running the migrator again changes nothing, except that a password app user's password is set again (so rotation works).
 
-The app user must be a dedicated user: the migrator refuses `dbo`, `guest`, the schema owner, a role, or a user that has any other role or database permission.
+The app user must be a dedicated single user: the migrator refuses `dbo`, `guest`, the schema owner, a role, an Entra group, or a user that has any other role or database permission or owns a schema, object or role.
 
 | Setting (environment variable) | Meaning |
 | --- | --- |
@@ -58,4 +58,4 @@ Locally the database must be contained (`CONTAINMENT = PARTIAL`) so users can ha
 
 On Azure SQL, creating an `entra` app user requires the migrator to sign in as an Entra principal (not a SQL user), and the server needs permission to look up Entra names. The Bicep templates (#18) and the deploy workflow (#21) cover this.
 
-CI checks every PR's database scripts (the "Database checks" job): merged migration and seed scripts must be unchanged, and a database built by `main`'s migrator and then upgraded by the PR's must match a fresh build. To run the upgrade check locally, build `main`'s migrator and point `FINANCEGOALS_BASE_MIGRATOR` at its `FinanceGoals.Migrator.dll`; without it the test reports inconclusive.
+CI checks every PR's database scripts (the "Database checks" job): merged migration and seed scripts must be unchanged, both on disk and as embedded in the migrator, and a database built by `main`'s migrator and then upgraded by the PR's must match a fresh build. There are no releases yet, so `main` stands in for the last release. To run these checks locally, build `main`'s migrator and point `FINANCEGOALS_BASE_MIGRATOR` at its `FinanceGoals.Migrator.dll`; without it the test reports inconclusive.
