@@ -65,7 +65,7 @@ jobs:
           labeled=$(gh api "repos/$REPO/issues/$PR/labels" --jq '[.[].name] | index("human-approved") != null')
           if [ "$labeled" = "true" ]; then
             # Only the owner's own label counts, not one added by an app, bot or other account.
-            for attempt in 1 2 3; do
+            for _ in 1 2 3; do
               # The events API can lag a moment behind the label itself.
               by=$(gh api "repos/$REPO/issues/$PR/events" --paginate \
                      --jq '.[] | select(.event == "labeled" and .label.name == "human-approved") | .actor.login + " " + .actor.type' | tail -n1)
