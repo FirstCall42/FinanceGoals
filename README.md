@@ -29,3 +29,5 @@ dotnet test
 | `tests/*` | Test projects: MSTest on Microsoft.Testing.Platform, NSubstitute for mocks |
 
 Shared build settings live in `Directory.Build.props`, and every NuGet version lives in `Directory.Packages.props`.
+
+<!-- PR gates smoke test: this PR is closed without merging. -->
