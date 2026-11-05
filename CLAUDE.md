@@ -72,6 +72,7 @@ npm run build
 
 Test and production run on Azure free tiers, and the monthly cost must stay at $0. Flag anything that could incur a charge.
 
+- Images are built once per commit on main and tagged with the commit SHA (`ghcr.io/firstcall42/financegoals-<api|migrator|web>:<sha>`). Deploy and promote by SHA; never rebuild per environment, never use `latest`, and never bake environment settings into an image.
 - Every Azure resource is defined in `infra/`; never configure anything in the portal. CI compiles and lints the templates (the "Infra" check).
 - No Key Vault and no stored secrets: workloads sign in to Azure SQL and other services with their managed identities.
 - Keep each environment in one region (traffic between regions is billed): test in `swedencentral`, production in `germanywestcentral`. The subscription allows one Container Apps environment per region.
