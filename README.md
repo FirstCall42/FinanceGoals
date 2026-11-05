@@ -34,6 +34,22 @@ dotnet test          # also writes coverage to TestResults/<project>.cobertura.x
 
 Shared build settings live in `Directory.Build.props`, and every NuGet version lives in `Directory.Packages.props`.
 
+## API
+
+```sh
+ConnectionStrings__App="Server=...;User ID=financegoals_app;..." dotnet run --project src/FinanceGoals.Api
+```
+
+| Endpoint | Meaning |
+| --- | --- |
+| `GET /health/live` | The process answers. Runs no checks and never touches the database, so a database outage doesn't restart the API |
+| `GET /health/ready` | The API can serve requests: it can connect to the database with `ConnectionStrings__App`. `503` otherwise |
+| `GET /openapi/v1.json` | The OpenAPI document, in Development only |
+
+The build writes the OpenAPI document to `src/FinanceGoals.Api/openapi/FinanceGoals.Api.json`. It is committed, so API changes show in the pull request diff.
+
+Logs are JSON lines on standard output (Serilog), with levels set in the `Serilog` configuration section. Successful health probes are left out of the request log; failed ones are logged as errors.
+
 ## Database
 
 The migrator connects as the **schema owner** (a `db_owner` user) and:
