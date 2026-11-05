@@ -116,7 +116,6 @@ jobs:
       contents: read
       pull-requests: write
       issues: read
-      id-token: write
     outputs:
       result: ${{ steps.review.outputs.structured_output }}
       outcome: ${{ steps.review.outcome }}
@@ -146,6 +145,8 @@ jobs:
           CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1"
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # The job's own token, limited to the permissions above. No Claude GitHub App needed.
+          github_token: ${{ github.token }}
           prompt: |
             REPO: ${{ github.repository }}
             PR NUMBER: ${{ github.event.pull_request.number }}
