@@ -26,6 +26,6 @@ dotnet test
 | `src/FinanceGoals.Infrastructure` | EF Core, external services; references Application |
 | `src/FinanceGoals.Api` | ASP.NET Core Minimal API; references Application and Infrastructure |
 | `src/FinanceGoals.Migrator` | DbUp console app that applies the database scripts |
-| `tests/*` | Test projects (xUnit v3 on Microsoft.Testing.Platform) |
+| `tests/*` | Test projects: MSTest on Microsoft.Testing.Platform, NSubstitute for mocks |
 
 Shared build settings live in `Directory.Build.props`, and every NuGet version lives in `Directory.Packages.props`.
