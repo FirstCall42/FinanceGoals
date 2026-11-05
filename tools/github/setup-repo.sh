@@ -86,7 +86,7 @@ env_secrets=$(gh secret list --repo "$REPO" --env pr-gates --json name --jq '.[]
 gates_on_main=""
 if gh api "repos/$REPO/contents/.github/workflows/pr-gates.yml" >/dev/null 2>&1; then gates_on_main=yes; fi
 missing=()
-[ -n "$app_id" ] || missing+=("repo variable GATES_APP_ID")
+[[ "$app_id" =~ ^[0-9]+$ ]] || missing+=("repo variable GATES_APP_ID (the numeric App ID, not the Client ID)")
 grep -qx GATES_APP_PRIVATE_KEY <<<"$env_secrets" || missing+=("pr-gates secret GATES_APP_PRIVATE_KEY")
 grep -qx CLAUDE_CODE_OAUTH_TOKEN <<<"$env_secrets" || missing+=("pr-gates secret CLAUDE_CODE_OAUTH_TOKEN")
 [ -n "$gates_on_main" ] || missing+=("pr-gates.yml merged to main")
