@@ -4,7 +4,9 @@ namespace FinanceGoals.Domain.Currencies;
 public sealed class CurrencyMismatchException : InvalidOperationException
 {
     public CurrencyMismatchException(Currency left, Currency right)
-        : base($"Cannot combine {left.Code} and {right.Code} without converting one of them first.")
+        : base(left.Code == right.Code
+            ? $"Two definitions of {left.Code} disagree ({left.MinorUnits} and {right.MinorUnits} minor units)."
+            : $"Cannot combine {left.Code} and {right.Code} without converting one of them first.")
     {
         Left = left;
         Right = right;
