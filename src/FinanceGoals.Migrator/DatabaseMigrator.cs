@@ -21,10 +21,14 @@ internal sealed class DatabaseMigrator
     //   50001  dbo, guest, a system user, or the connecting user itself;
     //   50002  not a single user: a role, an Entra group (every member would get access),
     //          a certificate or key user;
-    //   50003  already has other roles or permissions, or owns a schema, object or role.
-    // Then creates the user if missing; for a password user, sets the configured password every
-    // run so rotating it in configuration takes effect. Adding an existing member is a no-op.
-    // One transaction: if the created user turns out to be a group, nothing is kept.
+    //   50003  already has other roles or permissions, or owns a schema, object or role;
+    //   50004  an existing Entra user whose SID is not the configured client ID (another
+    //          identity holds the name).
+    // Then creates the user if missing: an Entra user from its client ID (WITH SID, TYPE = E, so
+    // the server never looks names up in Entra), or a contained user with a password. For a
+    // password user, it sets the configured password every run so rotating it in configuration
+    // takes effect. Adding an existing member is a no-op.
+    // One transaction: if anything is refused, nothing is kept.
     private const string _ensureAppUserSql = """
         SET XACT_ABORT ON;
         BEGIN TRANSACTION;
@@ -48,9 +52,16 @@ internal sealed class DatabaseMigrator
            OR EXISTS (SELECT 1 FROM sys.database_principals WHERE owning_principal_id = @id)
             THROW 50003, N'The app user already has other roles, permissions or ownerships; it may only be a member of app_data.', 1;
 
+        -- Azure SQL stores an Entra application's client ID, as varbinary(16), as its SID.
+        DECLARE @sid varbinary(16) = CONVERT(varbinary(16), @clientId);
+
+        IF @id IS NOT NULL AND @sid IS NOT NULL
+           AND (SELECT sid FROM sys.database_principals WHERE principal_id = @id) <> @sid
+            THROW 50004, N'A user with the app user name already exists for a different identity (its SID is not the configured client ID).', 1;
+
         IF @id IS NULL
             SET @sql = N'CREATE USER ' + QUOTENAME(@name) +
-                CASE WHEN @password IS NULL THEN N' FROM EXTERNAL PROVIDER'
+                CASE WHEN @sid IS NOT NULL THEN N' WITH SID = ' + CONVERT(nvarchar(34), @sid, 1) + N', TYPE = E'
                      ELSE N' WITH PASSWORD = ' + QUOTENAME(@password, N'''') END;
         ELSE IF @password IS NOT NULL
             SET @sql = N'ALTER USER ' + QUOTENAME(@name) + N' WITH PASSWORD = ' + QUOTENAME(@password, N'''');
@@ -58,7 +69,6 @@ internal sealed class DatabaseMigrator
         IF @sql IS NOT NULL
             EXEC (@sql);
 
-        -- An Entra name that resolves to a group creates a type X user; refuse it.
         IF (SELECT type FROM sys.database_principals WHERE name = @name) NOT IN ('S', 'E')
             THROW 50002, N'The app user name belongs to a role, a group or another kind of principal, not a single user.', 1;
 
@@ -136,6 +146,10 @@ internal sealed class DatabaseMigrator
         command.Parameters.Add(new SqlParameter("@password", System.Data.SqlDbType.NVarChar, 128)
         {
             Value = (object?)appUser.Password ?? DBNull.Value,
+        });
+        command.Parameters.Add(new SqlParameter("@clientId", System.Data.SqlDbType.UniqueIdentifier)
+        {
+            Value = (object?)appUser.ClientId ?? DBNull.Value,
         });
         command.ExecuteNonQuery();
     }
