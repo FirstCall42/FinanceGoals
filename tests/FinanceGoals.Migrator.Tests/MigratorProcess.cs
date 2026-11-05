@@ -14,6 +14,7 @@ internal static class MigratorProcess
         "Migrator__AppUser",
         "Migrator__AppUserKind",
         "Migrator__AppUserPassword",
+        "Migrator__AppUserClientId",
     ];
 
     /// <summary>This branch's migrator, built next to the tests by the project reference.</summary>

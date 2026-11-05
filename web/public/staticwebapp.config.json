@@ -1,0 +1,10 @@
+{
+  "navigationFallback": {
+    "rewrite": "/index.html",
+    "exclude": ["/config.json", "*.{js,css,ico,png,svg,woff,woff2,map,txt}"]
+  },
+  "routes": [
+    { "route": "/config.json", "headers": { "Cache-Control": "no-cache" } },
+    { "route": "/index.html", "headers": { "Cache-Control": "no-cache" } }
+  ]
+}

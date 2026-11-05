@@ -7,6 +7,7 @@ using Microsoft.Extensions.Configuration;
 //   Migrator__AppUserKind            "password" (contained user) or "entra" (Entra ID user);
 //                                    required with Migrator__AppUser
 //   Migrator__AppUserPassword        its password, for kind "password" only
+//   Migrator__AppUserClientId        its client (application) ID, for kind "entra" only
 var configuration = new ConfigurationBuilder()
     .AddEnvironmentVariables()
     .AddCommandLine(args)
@@ -24,12 +25,15 @@ try
     var appUser = AppUser.FromSettings(
         configuration["Migrator:AppUser"],
         configuration["Migrator:AppUserKind"],
-        configuration["Migrator:AppUserPassword"]);
+        configuration["Migrator:AppUserPassword"],
+        configuration["Migrator:AppUserClientId"]);
     if (appUser is null)
     {
-        var orphaned = configuration["Migrator:AppUserKind"] is not null || configuration["Migrator:AppUserPassword"] is not null;
+        var orphaned = configuration["Migrator:AppUserKind"] is not null
+            || configuration["Migrator:AppUserPassword"] is not null
+            || configuration["Migrator:AppUserClientId"] is not null;
         Console.WriteLine(orphaned
-            ? "WARNING: Migrator__AppUserKind or Migrator__AppUserPassword is set but Migrator__AppUser is not; no app user step."
+            ? "WARNING: Migrator__AppUserKind, Migrator__AppUserPassword or Migrator__AppUserClientId is set but Migrator__AppUser is not; no app user step."
             : "No Migrator__AppUser set; skipping the app user step.");
     }
 

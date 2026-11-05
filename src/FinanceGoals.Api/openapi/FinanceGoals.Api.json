@@ -4,5 +4,73 @@
     "title": "FinanceGoals.Api | v1",
     "version": "1.0.0"
   },
-  "paths": { }
+  "paths": {
+    "/api/currencies": {
+      "get": {
+        "tags": [
+          "FinanceGoals.Api"
+        ],
+        "summary": "The currencies the app supports, ordered by code.",
+        "operationId": "ListCurrencies",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CurrencyInfo"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CurrencyInfo": {
+        "required": [
+          "code",
+          "numericCode",
+          "minorUnits",
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "numericCode": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int16"
+          },
+          "minorUnits": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "uint8"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "description": "A currency the app knows, as seeded from ISO 4217."
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "FinanceGoals.Api"
+    }
+  ]
 }

@@ -1,4 +1,5 @@
 using FinanceGoals.Api;
+using FinanceGoals.Application.Currencies;
 using FinanceGoals.Infrastructure;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Serilog;
@@ -11,10 +12,24 @@ builder.Services.AddSerilog((services, logger) => ApiLogging.Configure(
     services.GetService<ApiLogging.Output>()?.Writer ?? Console.Out));
 builder.Services.AddOpenApi();
 builder.Services.AddHealthChecks().AddDatabaseHealthCheck();
+builder.Services.AddInfrastructure();
+
+// Unhandled errors become a ProblemDetails 500; the exception is logged, never sent to the client.
+builder.Services.AddProblemDetails();
+
+// The web app is served from another origin (Static Web Apps), so the API allows exactly the
+// origins in Cors:AllowedOrigins (Cors__AllowedOrigins__0 and so on, set by infra/). None by default.
+var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+builder.Services.AddCors(options => options.AddDefaultPolicy(policy => policy
+    .WithOrigins(allowedOrigins)
+    .WithMethods("GET", "POST", "PUT", "PATCH", "DELETE")
+    .WithHeaders("Content-Type", "Authorization")));
 
 var app = builder.Build();
 
+app.UseExceptionHandler();
 app.UseSerilogRequestLogging(options => options.GetLevel = (context, _, error) => ApiLogging.RequestLevel(context, error));
+app.UseCors();
 
 if (app.Environment.IsDevelopment())
 {
@@ -31,5 +46,10 @@ app.MapHealthChecks("/health/ready", new HealthCheckOptions
 {
     Predicate = check => check.Tags.Contains(InfrastructureServices.ReadyTag),
 });
+
+app.MapGet("/api/currencies", async (ICurrencyCatalog catalog, CancellationToken cancellationToken) =>
+        TypedResults.Ok(await catalog.ListAsync(cancellationToken)))
+    .WithName("ListCurrencies")
+    .WithSummary("The currencies the app supports, ordered by code.");
 
 app.Run();

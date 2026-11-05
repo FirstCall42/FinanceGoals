@@ -8,19 +8,24 @@ namespace FinanceGoals.Migrator;
 /// </summary>
 internal sealed partial class AppUser
 {
-    private AppUser(string name, string? password)
+    private AppUser(string name, string? password, Guid? clientId)
     {
         Name = name;
         Password = password;
+        ClientId = clientId;
     }
 
     public string Name { get; }
 
-    /// <summary>
-    /// Set for a contained user with a password (local SQL Server, Azure SQL). Null for an
-    /// Entra ID user, such as the API's managed identity in Azure.
-    /// </summary>
+    /// <summary>Set for a contained user with a password (local SQL Server, tests). Null otherwise.</summary>
     public string? Password { get; }
+
+    /// <summary>
+    /// Set for an Entra ID user, such as the API's managed identity in Azure: its client
+    /// (application) ID, which Azure SQL uses as the user's SID. Creating the user from the ID
+    /// means the server never needs permission to look up names in Entra. Null otherwise.
+    /// </summary>
+    public Guid? ClientId { get; }
 
     public static AppUser WithPassword(string name, string password)
     {
@@ -30,16 +35,24 @@ internal sealed partial class AppUser
             throw new ArgumentException("The password must be 128 characters or fewer.", nameof(password));
         }
 
-        return new AppUser(ValidName(name), password);
+        return new AppUser(ValidName(name), password, clientId: null);
     }
 
-    public static AppUser FromExternalProvider(string name) => new(ValidName(name), password: null);
+    public static AppUser FromEntra(string name, Guid clientId)
+    {
+        if (clientId == Guid.Empty)
+        {
+            throw new ArgumentException("The client ID must not be empty.", nameof(clientId));
+        }
+
+        return new AppUser(ValidName(name), password: null, clientId);
+    }
 
     /// <summary>
     /// Reads the migrator settings. The kind is explicit so that a missing or misspelt password
-    /// fails instead of silently granting app_data to an Entra principal with that name.
+    /// fails instead of silently creating an Entra user, and an Entra user needs its client ID.
     /// </summary>
-    public static AppUser? FromSettings(string? name, string? kind, string? password)
+    public static AppUser? FromSettings(string? name, string? kind, string? password, string? clientId)
     {
         if (string.IsNullOrWhiteSpace(name))
         {
@@ -48,10 +61,14 @@ internal sealed partial class AppUser
 
         return kind?.Trim().ToUpperInvariant() switch
         {
+            "PASSWORD" when !string.IsNullOrEmpty(clientId) =>
+                throw new ArgumentException("A password app user has no client ID; unset Migrator__AppUserClientId."),
             "PASSWORD" when !string.IsNullOrEmpty(password) => WithPassword(name, password),
             "PASSWORD" => throw new ArgumentException("Migrator__AppUserPassword is required for AppUserKind 'password'."),
-            "ENTRA" when string.IsNullOrEmpty(password) => FromExternalProvider(name),
-            "ENTRA" => throw new ArgumentException("An Entra ID app user has no password; unset Migrator__AppUserPassword."),
+            "ENTRA" when !string.IsNullOrEmpty(password) =>
+                throw new ArgumentException("An Entra ID app user has no password; unset Migrator__AppUserPassword."),
+            "ENTRA" when Guid.TryParse(clientId, out var id) => FromEntra(name, id),
+            "ENTRA" => throw new ArgumentException("Migrator__AppUserClientId must be the app user's client ID (a GUID) for AppUserKind 'entra'."),
             _ => throw new ArgumentException("Migrator__AppUserKind must be 'password' or 'entra'."),
         };
     }

@@ -87,11 +87,12 @@ The app user must be a dedicated single user: the migrator refuses `dbo`, `guest
 | `ConnectionStrings__SchemaOwner` | Schema owner connection string (required) |
 | `Migrator__AppUser` | App user to create and grant `app_data` (optional) |
 | `Migrator__AppUserKind` | `password` (contained user) or `entra` (Entra ID user, e.g. the API's managed identity); required with `Migrator__AppUser` |
+| `Migrator__AppUserClientId` | Its client (application) ID, for kind `entra` only |
 | `Migrator__AppUserPassword` | Its password, for kind `password` only. Set on every run, so rotating it here takes effect. Pass it as an environment variable, not `--Migrator:AppUserPassword=`, which shows in process listings |
 
 Locally the database must be contained (`CONTAINMENT = PARTIAL`) so users can have passwords; Docker Compose (#13) will set that up. The migrator tests do the same against SQL Server in Docker, so Docker must be running for `dotnet test`.
 
-On Azure SQL, creating an `entra` app user requires the migrator to sign in as an Entra principal (not a SQL user), and the server needs permission to look up Entra names. The Bicep templates (#18) and the deploy workflow (#21) cover this.
+On Azure SQL, the migrator signs in with its managed identity, which is the server's Entra admin. It creates an `entra` app user from the client ID (`CREATE USER ... WITH SID = <client id>, TYPE = E`), so the server never needs permission to look up names in Entra. If a user with that name already exists for a different identity, the migrator refuses it (error 50004).
 
 CI checks every PR's database scripts (the "Database checks" job): merged migration and seed scripts must be unchanged, both on disk and as embedded in the migrator, and a database built by `main`'s migrator and then upgraded by the PR's must match a fresh build. There are no releases yet, so `main` stands in for the last release. To run these checks locally, build `main`'s migrator and point `FINANCEGOALS_BASE_MIGRATOR` at its `FinanceGoals.Migrator.dll`; without it the test reports inconclusive.
 
@@ -112,7 +113,7 @@ docker build -f src/FinanceGoals.Api/Dockerfile -t financegoals-api .
 docker run --rm -p 8080:8080 financegoals-api        # http://localhost:8080/health/live
 ```
 
-The **Images** workflow builds all three on every pull request (the "Images" check) without pushing. On every push to `main` it builds them **once** and pushes `ghcr.io/firstcall42/financegoals-<image>:<commit SHA>`; a tag that already exists is never rebuilt. Deploys use these exact images for test and then promote the same tags to production. The web image's files are what Static Web Apps serves; settings that differ per environment (such as the API URL) are added at deploy time, not baked into the build.
+The **Release** workflow (`.github/workflows/release.yml`) builds all three on every pull request (the "Images" check) without pushing. On every push to `main` it builds them **once**, pushes `ghcr.io/firstcall42/financegoals-<image>:<commit SHA>` (a tag that already exists is never rebuilt), and deploys that commit to test. Production (#86) will promote the same tags. The web image's files are what Static Web Apps serves; settings that differ per environment (such as the API URL) are added at deploy time, not baked into the build.
 
 ## Cloud
 
@@ -156,7 +157,22 @@ az deployment group what-if -g rg-financegoals-test -p infra/test.bicepparam   #
 az deployment group create  -g rg-financegoals-test -p infra/test.bicepparam
 ```
 
-The API runs a placeholder image until the deploy workflow (#21) supplies real images (#20). Probes call `/health/live` only; see docs/free-tier.md for why.
+Probes call `/health/live` only; see docs/free-tier.md for why.
+
+### Deploys
+
+Every push to `main` deploys that commit to test, from the Release workflow's **Deploy to test** job. It signs in with OIDC and then:
+
+1. **Drift check:** Bicep what-if against what runs now, shown in the run summary. A deploy that would delete a resource stops here.
+2. **Infrastructure:** deploys `infra/` with the new migrator image. The API keeps its running image.
+3. **Migrator:** runs the migrator job and waits for it to succeed.
+4. **API:** deploys again with the new API image.
+5. **Web:** copies the files out of the web image, writes `config.json` with the API's URL, and uploads them to Static Web Apps. The deployment token is read at deploy time, never stored.
+6. **Smoke tests:** `/health/ready` (once per deploy, since it wakes the free database), `/api/currencies`, the web page, its `config.json`, and CORS from the web origin to the API.
+
+To redeploy the current `main`, run the Release workflow by hand (Actions > Release > Run workflow).
+
+The web app reads the API's address from `/config.json` when it starts. Locally that file has an empty `apiBaseUrl`, so requests stay relative and `ng serve` proxies them. The API accepts cross-origin requests only from `Cors__AllowedOrigins__<n>`, which `infra/` sets to the Static Web App's URL.
 
 Regions are where this subscription is allowed to create things. In 2026-11 Norway East, West Europe and North Europe refused new SQL servers, and the free SQL offer failed in Germany West Central and France Central, working only in Sweden Central. West Europe refused new Static Web Apps, and the subscription allows one Container Apps environment per region. See docs/free-tier.md. The resource groups themselves stay in `norwayeast`; their location is only metadata.
 

@@ -1,0 +1,308 @@
+name: Release
+
+# Builds the API, migrator and web images (Dockerfiles in src/FinanceGoals.Api, src/FinanceGoals.Migrator
+# and web), then deploys them to the test environment, the live one until production exists (#86).
+# - Pull requests: build the images as a check ("Images"); push and deploy nothing.
+# - Push to main: build each image once and push it to GitHub Container Registry, tagged with the
+#   commit SHA (an existing tag is never rebuilt or overwritten), then deploy that commit to test.
+# - Manual run on main: deploy the commit again (its images already exist).
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # One group per PR (superseded runs are cancelled) and one per commit on main (never cancelled).
+  group: release-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Images
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Build the API image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: src/FinanceGoals.Api/Dockerfile
+          push: false
+          cache-from: type=gha,scope=api
+
+      - name: Build the migrator image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: src/FinanceGoals.Migrator/Dockerfile
+          push: false
+          cache-from: type=gha,scope=migrator
+
+      - name: Build the web image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: web/Dockerfile
+          push: false
+          cache-from: type=gha,scope=web
+
+  publish:
+    name: Publish images
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write # push to ghcr.io; only on main
+    outputs:
+      prefix: ${{ steps.plan.outputs.prefix }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Decide what to build
+        id: plan
+        run: |
+          # Registry names must be lowercase.
+          prefix="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/financegoals"
+          echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
+          for image in api migrator web; do
+            tag="$prefix-$image:$GITHUB_SHA"
+            if docker buildx imagetools inspect "$tag" > /dev/null 2>&1; then
+              echo "$tag exists; not rebuilding it."
+              echo "$image=skip" >> "$GITHUB_OUTPUT"
+            else
+              echo "$image=build" >> "$GITHUB_OUTPUT"
+            fi
+          done
+
+      - name: Build and push the API image
+        if: steps.plan.outputs.api == 'build'
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: src/FinanceGoals.Api/Dockerfile
+          push: true
+          tags: ${{ steps.plan.outputs.prefix }}-api:${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+
+      - name: Build and push the migrator image
+        if: steps.plan.outputs.migrator == 'build'
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: src/FinanceGoals.Migrator/Dockerfile
+          push: true
+          tags: ${{ steps.plan.outputs.prefix }}-migrator:${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=migrator
+          cache-to: type=gha,mode=max,scope=migrator
+
+      - name: Build and push the web image
+        if: steps.plan.outputs.web == 'build'
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: web/Dockerfile
+          push: true
+          tags: ${{ steps.plan.outputs.prefix }}-web:${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
+
+      - name: Summary
+        env:
+          PREFIX: ${{ steps.plan.outputs.prefix }}
+        run: |
+          {
+            echo "### Images for $GITHUB_SHA"
+            for image in api migrator web; do echo "- \`$PREFIX-$image:$GITHUB_SHA\`"; done
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  deploy-test:
+    name: Deploy to test
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # Only main can use this environment, and it holds the OIDC identity for rg-financegoals-test.
+    environment: test
+    # Deploys run one at a time, in order; a newer one never cancels one in progress.
+    concurrency:
+      group: deploy-test
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write # Azure sign-in with OIDC; no stored secret
+    env:
+      RG: ${{ vars.AZURE_RESOURCE_GROUP }}
+      PARAMS: infra/test.bicepparam
+      API_APP: ca-financegoals-api-test
+      MIGRATOR_JOB: caj-financegoals-migrator-test
+      NEW_API: ${{ needs.publish.outputs.prefix }}-api:${{ github.sha }}
+      NEW_MIGRATOR: ${{ needs.publish.outputs.prefix }}-migrator:${{ github.sha }}
+      NEW_WEB: ${{ needs.publish.outputs.prefix }}-web:${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Sign in to Azure with OIDC
+        uses: azure/login@v3
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Prepare the Azure CLI
+        run: |
+          az config set extension.use_dynamic_install=yes_without_prompt --only-show-errors
+          az bicep install
+
+      - name: Read the running API image
+        id: current
+        run: |
+          # The first deploy finds the template's placeholder image.
+          image=$(az containerapp show -g "$RG" -n "$API_APP" --query "properties.template.containers[0].image" -o tsv 2>/dev/null || true)
+          echo "api=${image:-mcr.microsoft.com/k8se/quickstart:latest}" >> "$GITHUB_OUTPUT"
+
+      - name: Drift check (what-if)
+        env:
+          CURRENT_API: ${{ steps.current.outputs.api }}
+        run: |
+          # Compares the templates with what runs now, keeping the running API image, so the result
+          # shows template changes and anything changed outside the templates. Deletions stop the deploy.
+          az deployment group what-if -g "$RG" -p "$PARAMS" -p apiImage="$CURRENT_API" migratorImage="$NEW_MIGRATOR" \
+            --no-pretty-print > what-if.json
+          {
+            echo "### Drift check (what-if) for $RG"
+            echo
+            echo "| Change | Resource |"
+            echo "| --- | --- |"
+            jq -r '.changes[] | select(.changeType != "Ignore") | "| \(.changeType) | \(.resourceId | split("/providers/")[1]) |"' what-if.json
+          } >> "$GITHUB_STEP_SUMMARY"
+          deletes=$(jq '[.changes[] | select(.changeType == "Delete")] | length' what-if.json)
+          if [ "$deletes" != "0" ]; then
+            echo "::error::The deploy would delete $deletes resource(s); see the what-if summary."
+            exit 1
+          fi
+
+      - name: Deploy infrastructure with the new migrator
+        env:
+          CURRENT_API: ${{ steps.current.outputs.api }}
+        run: |
+          # The API keeps its running image until the migrator has updated the database.
+          az deployment group create -g "$RG" -n "infra-test-${GITHUB_SHA::12}-1" -p "$PARAMS" \
+            -p apiImage="$CURRENT_API" migratorImage="$NEW_MIGRATOR" --output none
+
+      - name: Run the migrator
+        run: |
+          execution=$(az containerapp job start -g "$RG" -n "$MIGRATOR_JOB" --query name -o tsv)
+          echo "Migrator execution: $execution"
+          for _ in $(seq 1 60); do
+            status=$(az containerapp job execution show -g "$RG" -n "$MIGRATOR_JOB" --job-execution-name "$execution" \
+              --query properties.status -o tsv)
+            echo "status: $status"
+            case "$status" in
+              Succeeded) exit 0 ;;
+              Failed|Stopped|Degraded)
+                echo "::error::Migrator execution $execution ended as $status. Its output is in Log Analytics (ContainerAppConsoleLogs_CL)."
+                exit 1 ;;
+            esac
+            sleep 10
+          done
+          echo "::error::The migrator did not finish within 10 minutes."
+          exit 1
+
+      - name: Deploy the new API
+        id: deploy
+        run: |
+          az deployment group create -g "$RG" -n "infra-test-${GITHUB_SHA::12}-2" -p "$PARAMS" \
+            -p apiImage="$NEW_API" migratorImage="$NEW_MIGRATOR" --query properties.outputs -o json > outputs.json
+          {
+            echo "api_url=$(jq -r .apiUrl.value outputs.json)"
+            echo "web_url=$(jq -r .webUrl.value outputs.json)"
+            echo "swa=$(jq -r .staticWebAppName.value outputs.json)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Prepare the web files
+        env:
+          API_URL: ${{ steps.deploy.outputs.api_url }}
+          SWA: ${{ steps.deploy.outputs.swa }}
+        run: |
+          # The same build as in the web image; only config.json is written per environment.
+          docker create --name web "$NEW_WEB" > /dev/null
+          docker cp web:/usr/share/nginx/html ./site
+          docker rm web > /dev/null
+          jq -n --arg url "$API_URL" '{apiBaseUrl: $url}' > site/config.json
+          # The deployment token is read at deploy time through the OIDC sign-in; it is never stored.
+          token=$(az staticwebapp secrets list -g "$RG" -n "$SWA" --query properties.apiKey -o tsv)
+          echo "::add-mask::$token"
+          echo "SWA_TOKEN=$token" >> "$GITHUB_ENV"
+
+      - name: Deploy the web app
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ env.SWA_TOKEN }}
+          action: upload
+          app_location: site
+          output_location: ""
+          api_location: ""
+          skip_app_build: true
+          skip_api_build: true
+
+      - name: Smoke tests
+        env:
+          API_URL: ${{ steps.deploy.outputs.api_url }}
+          WEB_URL: ${{ steps.deploy.outputs.web_url }}
+        run: |
+          # Retries cover a cold start: the API scales from zero and the free database resumes from
+          # auto-pause, which can take a minute. /health/ready runs once per deploy (docs/free-tier.md).
+          retry() { for _ in $(seq 1 18); do if "$@"; then return 0; fi; sleep 10; done; return 1; }
+          ready() { curl -fsS --max-time 30 "$API_URL/health/ready" | grep -qx Healthy; }
+          currencies() { curl -fsS --max-time 30 "$API_URL/api/currencies" | jq -e 'map(.code) | index("NOK") != null' > /dev/null; }
+          web() { curl -fsS --max-time 30 "$WEB_URL/" | grep -q '<app-root'; }
+          config() { curl -fsS --max-time 30 "$WEB_URL/config.json" | jq -e --arg url "$API_URL" '.apiBaseUrl == $url' > /dev/null; }
+          cors() {
+            curl -fsS --max-time 30 -o /dev/null -D - -X OPTIONS -H "Origin: $WEB_URL" -H "Access-Control-Request-Method: GET" \
+              "$API_URL/api/currencies" | grep -qi "^access-control-allow-origin: $WEB_URL"
+          }
+          failed=0
+          for check in ready currencies web config cors; do
+            if retry "$check"; then echo "ok: $check"; else echo "::error::Smoke test failed: $check"; failed=1; fi
+          done
+          {
+            echo "### Deployed ${GITHUB_SHA::12} to test"
+            echo "- API: $API_URL ($NEW_API)"
+            echo "- Web: $WEB_URL"
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$failed"
