@@ -83,6 +83,12 @@ Test and production run on Azure free tiers, and the monthly cost must stay at $
 - GitHub Actions signs in to Azure with OpenID Connect (`azure/login` with `vars.AZURE_CLIENT_ID`, `vars.AZURE_TENANT_ID` and `vars.AZURE_SUBSCRIPTION_ID`). Never store an Azure password, secret or certificate in GitHub.
 - A job reaches Azure only through the `test` or `production` GitHub environment, and gets only `id-token: write` on top of what it already needs. Only workflows triggered by `push` to main or `workflow_dispatch` may use these environments. Never use them from `pull_request_target` or `workflow_run`: those runs count as main but handle code or input from a pull request. Each environment identity is Contributor on its own resource group and nothing more. Grant anything extra in `tools/azure/setup-github-oidc.sh`, with a reason, never in the portal.
 
+## Working agreement
+
+- The owner defines goals and features (issues with a "Done when" list) and sets priorities. Claude takes the next issue, builds and tests it, opens the PR, and lets auto-merge land it when the checks pass.
+- Claude decides technical details itself and keeps solutions lean: no extra guards, exhaustive docs or long PR descriptions unless they earn their place. Each PR gets a short summary.
+- Only stop to ask the owner about: product and UI decisions; anything that could cost money; deleting or changing live data or cloud resources; and the `human-approved` label for PRs that change the review system. Batch questions into one.
+
 ## Workflow
 
 - One issue per branch: `<type>/<issue number>-<short-name>`, e.g. `chore/5-solution-structure`. Branch from an up-to-date `main`.
@@ -93,7 +99,7 @@ Test and production run on Azure free tiers, and the monthly cost must stay at $
 
 ## Review and merge
 
-- Before opening a PR, ask the owner whether to run the `pr-reviewer` agent (`.claude/agents/pr-reviewer.md`) locally on the branch, and recommend one way. Recommend running it for database scripts, security, money logic or larger changes, and skipping it for small or docs-only changes. Don't run it without asking. If it runs, fix its blocking findings before opening the PR. The AI review check runs on every PR either way.
+- Before opening a PR, run the `pr-reviewer` agent (`.claude/agents/pr-reviewer.md`) locally for database scripts, security, money logic, infrastructure or larger changes, and fix its blocking findings. Skip it for small or docs-only changes. The AI review check runs on every PR either way.
 - After opening a PR, turn on auto-merge: `gh pr merge <n> --auto --squash`. GitHub merges once every required check passes. Never merge by hand or bypass a check.
 - The `PR gates` workflow posts two required statuses through a dedicated GitHub App. The ruleset accepts them only from that app. **AI review** is the same reviewer, run from main's copy of the workflow. **Human approval** fails when a PR touches the review system itself (`.github/`, `tools/github/`, and at any depth `.claude/`, `CLAUDE.md` or `.gitattributes`) until the owner adds the `human-approved` label. Database scripts, infrastructure and build settings rely on AI review alone, so hold them to the highest standard and call out data-loss or cost risk in the PR description.
 - Never add a workflow or step that posts commit statuses or touches the `pr-gates` environment.
