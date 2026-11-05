@@ -1,0 +1,65 @@
+# Backlog seeded into GitHub issues by seed-backlog.sh.
+# One issue per line: key|parent key|type|area|milestone|title|summary|done-when items separated by ';'
+# Parent issues have an empty parent key. Milestone keys: 0a 0b 1 2 3 4 5, or - for none.
+# Issues are matched by exact title, so editing a title here creates a new issue on the next run.
+
+p0a||chore|infra|0a|Walking skeleton: local stack and CI|The app runs locally with one command, and every test level runs in GitHub Actions on each pull request.|A pull request runs all checks green;docker compose up starts SQL Server, migrator, API and web;Each test level has at least one passing test
+sln|p0a|chore|infra|0a|.NET 10 solution structure and shared build settings|Create the solution with Domain, Application, Infrastructure, Api and Migrator projects and their test projects.|global.json pins the .NET 10 SDK;Directory.Build.props sets nullable, warnings as errors and analyzers;Directory.Packages.props holds all NuGet versions;dotnet build and dotnet format pass
+arch|p0a|chore|infra|0a|Unit and architecture test projects|Set up xUnit v3, Shouldly and NetArchTest, with coverage reporting.|One passing domain unit test;An architecture test fails if Domain references another project;Coverage report produced by dotnet test
+mig|p0a|chore|infra|0a|Migrator: DbUp console app with migrations, repeatable and seed folders|The migrator applies journaled, guarded T-SQL scripts and runs as a container job.|db/migrations, db/repeatable and db/seed folders exist with one script each;Migrator is idempotent: a second run changes nothing;Separate schema-owner and app database users
+dbci|p0a|chore|infra|0a|Database checks in CI: fresh build, re-run, upgrade and checksum|Prove every change to the scripts is idempotent and that merged scripts are never edited.|Fresh build on an empty SQL Server container;Re-run produces an empty schema snapshot diff;Upgrade path from the last release matches a fresh build;CI fails if a merged migration script changes
+api|p0a|chore|infra|0a|API skeleton: Minimal API, health endpoints and OpenAPI|ASP.NET Core API with liveness and readiness endpoints and a published OpenAPI document.|Liveness never touches the database;Readiness checks the database;OpenAPI document generated at build time;Serilog structured logging
+itest|p0a|chore|infra|0a|API integration test harness with Testcontainers SQL Server|WebApplicationFactory plus a SQL Server container migrated by the real DbUp scripts.|One integration test calls an endpoint backed by the database;Tests never use an Azure database;Runs in GitHub Actions on ubuntu
+web|p0a|chore|infra|0a|Angular workspace with ESLint, Prettier and Vitest|Standalone Angular app showing the API health status.|ng build, lint and test pass;Home page shows API health
+client|p0a|chore|infra|0a|Generated TypeScript API client and contract check|Generate the Angular client from the OpenAPI document.|Client generated with one command;CI fails if the committed client differs from the generated one
+compose|p0a|chore|infra|0a|Docker Compose local stack|SQL Server, migrator, API and web started with one command.|docker compose up runs the whole stack;Seeded sample data;README documents the local setup
+e2e|p0a|chore|infra|0a|Playwright end-to-end test skeleton|End-to-end tests run against the Docker Compose stack, locally and in CI.|One E2E test opens the app and sees API health;Runs in GitHub Actions against the Compose stack
+ci|p0a|chore|infra|0a|CI workflow: build, lint, all test levels and coverage|One GitHub Actions workflow runs every check on pull requests.|Build, format and analyzers;Unit, integration, database, web, contract and E2E tests;Coverage summary on the PR;Job names added to the ruleset's required checks
+deps|p0a|chore|infra|0a|Dependabot and CodeQL|Keep NuGet, npm and Actions dependencies current and scan code on each PR.|Dependabot config for nuget, npm and github-actions with the dependencies label;CodeQL for C# and TypeScript
+
+p0b||chore|infra|0b|Cloud deployment on Azure free tiers|Test and production run on Azure free tiers, and a one-line change reaches production through the pipeline.|Merge to main deploys to test;Approval promotes the same build to production;Monthly cost stays at $0
+bicep|p0b|chore|infra|0b|Bicep templates for Container Apps, Static Web Apps, Azure SQL and Key Vault|All Azure resources are defined as code, one parameter file per environment.|Free-offer databases financegoals-test and financegoals-prod set to pause at the free limit;No portal-only configuration
+oidc|p0b|chore|infra|0b|GitHub Actions to Azure sign-in with OpenID Connect federation|No cloud passwords stored in GitHub.|Federated credentials for the test and production environments;Least-privilege role assignments
+images|p0b|chore|infra|0b|Build once: images tagged with the commit SHA in GitHub Container Registry|API, migrator and web images are built once per merge and promoted unchanged.|Images tagged with the commit SHA;Production deploys reuse the test images
+deploy|p0b|chore|infra|0b|Deploy workflow: test on merge, production with approval and smoke tests|Run the migrator, then the API and web, then smoke tests; production needs approval.|GitHub environment protection on production;Drift check before production;Smoke tests make one sign-in and one small read
+budget|p0b|chore|infra|0b|Budget alert and free-tier guardrails|Catch any Azure charge immediately.|$1 budget alert on the subscription;Uptime pings use liveness only;Documented free-tier limits and how to check usage
+
+p1h||feature|households|1|Google sign-in and household profiles|You and your family sign in with Google and share one household profile.|Two Google accounts see the same data in one profile;No access across profiles
+gsign|p1h|feature|households|1|Google sign-in (OpenID Connect)|Angular signs in with Google, and the API validates the tokens.|Sign-in and sign-out in the web app;API rejects missing or invalid tokens;App user record linked to the Google account
+hprof|p1h|feature|households|1|Household profile with Owner and Member roles|A profile owns all data. Owners manage members, Members view and edit.|Create a profile on first sign-in;Role checks on every endpoint;A user can belong to several profiles in the data model
+invite|p1h|feature|households|1|Invite household members by email|The owner invites a member with a single-use link.|Link works once and expires after 7 days;Accepting adds the member to the profile
+iso|p1h|feature|households|1|Profile isolation and audit columns|Every table carries profile_id, enforced by EF Core global query filters.|Integration tests prove a member of another profile gets 404 on every endpoint;Created and updated by and at on all data tables
+
+p1m||feature|currency|1|Money and currencies|Amounts keep their own currency, and any view converts using rates kept by date.|Totals in NOK from USD, RON and EUR accounts;Switch any view to another currency
+money|p1m|feature|currency|1|Money value object|decimal amount plus ISO 4217 code, with minor-unit rounding.|Adding different currencies without a conversion is impossible;Rounding uses each currency's minor units;Property-based tests
+iso4217|p1m|feature|currency|1|ISO 4217 currency seed data|Seed every ISO 4217 currency with its minor units.|Idempotent seed script;Currency list endpoint
+ecb|p1m|feature|currency|1|Daily ECB exchange-rate import|Background job imports ECB reference rates behind a provider interface.|Rates stored by date against EUR;Rerun for the same day changes nothing;Provider stubbed with WireMock.Net in tests
+conv|p1m|feature|currency|1|Currency conversion service|Convert any amount between currencies on a given date.|Cross rates via EUR;Uses the latest rate on or before the date;Missing rate shows a warning and never falls back to 1.0
+mainccy|p1m|feature|currency|1|Main currency per profile and a currency switcher|Each profile has a main currency (NOK for yours), and each view can switch currency.|Main-currency setting;Switcher component used by totals and graphs
+
+p2||feature|accounts|2|Accounts and net worth|Accounts by type and currency with value history, rolled up into net worth.|Net worth in the main currency with history
+acct|p2|feature|accounts|2|Accounts with type, currency and value|Brokerage, savings, deposit, current, pension and property accounts. No individual holdings.|Create, edit and archive accounts;Currency fixed once values exist
+snap|p2|feature|accounts|2|Dated value snapshots|Record an account's value on a date to build its history.|Add, edit and delete snapshots;History per account
+nw|p2|feature|accounts|2|Net worth with history|Assets minus debts, converted to the main currency.|Net worth for any date;Monthly history
+nwgraph|p2|feature|accounts|2|Net worth graph|Graph of net worth over time in the selected currency.|Uses the currency switcher;Shows the rate date
+
+p3||feature|debt|3|Debt payoff|Loans and mortgages of several types, with schedules, rate changes and what-if scenarios.|Your variable-rate annuity mortgage schedule matches the bank's figures
+loanmodel|p3|feature|debt|3|Loan model as a sequence of periods|Each period has a rate type, rate and repayment type, so later comparisons reuse one engine.|Create a loan with one or more periods;Variable-rate changes stored with effective dates
+annuity|p3|feature|debt|3|Annuity schedule with variable-rate changes|The first loan type: a Norwegian variable-rate annuity mortgage.|Schedule recalculated from each rate change;Known-answer test against a bank's example;Property tests: principal sums to the loan amount
+straight|p3|feature|debt|3|Straight-line repayment schedule|Fixed principal each period, falling payments.|Known-answer test
+fixedio|p3|feature|debt|3|Fixed-rate periods and interest-only periods|Support a rate fixed for a period and interest-only periods.|Schedules switch correctly at period boundaries
+whatif|p3|feature|debt|3|What-if scenarios: extra payments, lump sums and rate changes|Show months and interest saved.|Compare the scenario with the current schedule
+avsn|p3|feature|debt|3|Avalanche vs snowball across loans|Compare the two payoff strategies for several debts.|Payoff dates and total interest for both
+loanui|p3|feature|debt|3|Loan pages: schedule table and payoff chart|Browse a loan's schedule and payoff curve.|Schedule table;Payoff chart in the loan's currency or the switcher's
+
+p4||feature|goals|4|Savings goals|Targets with progress, the monthly amount needed and projections.|Progress for each goal in its currency
+goal|p4|feature|goals|4|Savings goals with target, currency, deadline and linked accounts|Create and manage goals.|CRUD;Link one or more accounts
+goalcalc|p4|feature|goals|4|Goal progress, required monthly amount and projections|Calculate progress and what is needed to hit the deadline.|Optional expected return;Unit tests for projections
+goalui|p4|feature|goals|4|Goals UI|Goal list and detail pages with progress.|Progress bar and projection chart
+
+p5||feature|accounts|5|Insights|A dashboard that ties debt, goals and net worth together.|One page shows the household's position
+dash|p5|feature|accounts|5|Dashboard|Net worth, debts and goals at a glance.|Main currency with the switcher
+fxeffect|p5|feature|currency|5|Currency effect vs real growth|A constant-rates toggle separates currency moves from real growth.|Toggle on the net-worth graph
+gtimeline|p5|feature|goals|5|Goal timeline|Goals and loan payoffs on one timeline.|Dates from projections and schedules
+
+mcomp||feature|debt|-|Mortgage comparison|Compare your current mortgage with alternatives such as a fixed rate for 3 or 5 years, an interest-only period or straight-line repayment.|Monthly payments, total interest and payoff date side by side;Reuses the loan schedule engine
