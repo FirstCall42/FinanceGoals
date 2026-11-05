@@ -127,6 +127,15 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Install the Claude Code sandbox dependencies
+        # Claude Code runs the reviewer's shell commands in a bubblewrap sandbox, which needs
+        # socat, and Ubuntu 24.04 blocks the unprivileged user namespaces bubblewrap uses.
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq bubblewrap socat
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          bwrap --ro-bind / / --unshare-all true && echo "bubblewrap works"
+
       - name: Export the PR's files for reading
         run: |
           git fetch --no-tags --depth=1 origin "+refs/pull/$PR/head:refs/remotes/pr/head"
