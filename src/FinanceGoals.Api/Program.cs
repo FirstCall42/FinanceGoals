@@ -38,14 +38,20 @@ app.UseSerilogRequestLogging(options => options.GetLevel = (context, _, error) =
 app.UseCors();
 
 // Real API requests use the database anyway; only they may start an exchange-rate import.
-app.Use((context, next) =>
+app.Use(async (context, next) =>
 {
-    if (ExchangeRateImportTrigger.ShouldSignal(context.Request))
+    try
     {
-        context.RequestServices.GetRequiredService<ExchangeRateImportTrigger>().Signal();
+        await next(context);
     }
-
-    return next(context);
+    finally
+    {
+        // After routing, so only requests that matched an endpoint count.
+        if (ExchangeRateImportTrigger.ShouldSignal(context))
+        {
+            context.RequestServices.GetRequiredService<ExchangeRateImportTrigger>().Signal();
+        }
+    }
 });
 
 if (app.Environment.IsDevelopment())

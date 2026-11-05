@@ -20,10 +20,14 @@ internal sealed class ExchangeRateImportTrigger
 
     public ValueTask<bool> WaitAsync(CancellationToken cancellationToken) => _signals.Reader.ReadAsync(cancellationToken);
 
-    /// <summary>Signals for API requests that reach the database, never for health checks or preflights.</summary>
-    public static bool ShouldSignal(HttpRequest request) =>
-        request.Path.StartsWithSegments("/api", StringComparison.OrdinalIgnoreCase)
-        && !HttpMethods.IsOptions(request.Method);
+    /// <summary>
+    /// Signals only for requests that matched an API endpoint. Not for unknown paths (a scanner's
+    /// probes would otherwise start imports that wake the database), health checks or preflights.
+    /// </summary>
+    public static bool ShouldSignal(HttpContext context) =>
+        context.GetEndpoint() is not null
+        && context.Request.Path.StartsWithSegments("/api", StringComparison.OrdinalIgnoreCase)
+        && !HttpMethods.IsOptions(context.Request.Method);
 }
 
 /// <summary>

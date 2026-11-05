@@ -56,29 +56,34 @@ public sealed class ExchangeRateImportServiceTests
     }
 
     [TestMethod]
-    [DataRow("GET", "/api/currencies", true)]
-    [DataRow("POST", "/api/accounts", true)]
-    [DataRow("OPTIONS", "/api/currencies", false)]
-    [DataRow("GET", "/health/live", false)]
-    [DataRow("GET", "/health/ready", false)]
-    [DataRow("GET", "/", false)]
-    public void Only_real_api_requests_may_start_an_import(string method, string path, bool expected)
+    [DataRow("GET", "/api/currencies", true, true)]
+    [DataRow("GET", "/api/v1/users", false, false)]
+    [DataRow("OPTIONS", "/api/currencies", true, false)]
+    [DataRow("GET", "/health/live", true, false)]
+    [DataRow("GET", "/health/ready", true, false)]
+    [DataRow("GET", "/", false, false)]
+    public void Only_requests_that_matched_an_api_endpoint_may_start_an_import(string method, string path, bool matched, bool expected)
     {
         var context = new DefaultHttpContext();
         context.Request.Method = method;
         context.Request.Path = path;
+        if (matched)
+        {
+            context.SetEndpoint(new Endpoint(_ => Task.CompletedTask, EndpointMetadataCollection.Empty, path));
+        }
 
-        ExchangeRateImportTrigger.ShouldSignal(context.Request).ShouldBe(expected);
+        ExchangeRateImportTrigger.ShouldSignal(context).ShouldBe(expected);
     }
 
     [TestMethod]
-    public async Task A_liveness_ping_does_not_signal_but_an_api_request_does()
+    public async Task A_liveness_ping_or_unknown_path_does_not_signal_but_an_api_request_does()
     {
         await using var api = new ApiFactory(ApiFactory.UnreachableDatabase);
         var client = api.CreateClient();
         var trigger = api.Services.GetRequiredService<ExchangeRateImportTrigger>();
 
         await client.GetAsync(new Uri("/health/live", UriKind.Relative));
+        await client.GetAsync(new Uri("/api/v1/users", UriKind.Relative));
         trigger.IsPending.ShouldBeFalse();
 
         await client.GetAsync(new Uri("/api/currencies", UriKind.Relative));
