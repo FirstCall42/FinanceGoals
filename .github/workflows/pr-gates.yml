@@ -55,9 +55,11 @@ jobs:
           ACTION: ${{ github.event.action }}
           OWNER: ${{ github.repository_owner }}
         run: |
-          # Paths that control the checks, the reviewer, the build, the database or the cloud,
-          # at any depth where tools pick them up from subdirectories.
-          sensitive='^(\.github/|tools/github/|db/|infra/|global\.json$|\.editorconfig$)|(^|/)(\.claude/|CLAUDE(\.local)?\.md$|Directory\.Build\.(props|targets)$|[Nn]u[Gg]et\.[Cc]onfig$|\.gitattributes$)'
+          # Paths that control the review system itself: workflows, the reviewer and its rules,
+          # the repo setup, and .gitattributes (which shapes the reviewer's copy of the PR).
+          # Matched at any depth where tools pick them up from subdirectories. Everything else,
+          # including database scripts and infrastructure, relies on AI review alone.
+          sensitive='^(\.github/|tools/github/)|(^|/)(\.claude/|CLAUDE(\.local)?\.md$|\.gitattributes$)'
 
           hits=$(gh api "repos/$REPO/pulls/$PR/files" --paginate \
                    --jq '.[] | .filename, (.previous_filename // empty)' | grep -E "$sensitive" | sort -u || true)
