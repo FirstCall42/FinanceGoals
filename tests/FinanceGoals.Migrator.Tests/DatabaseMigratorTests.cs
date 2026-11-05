@@ -153,6 +153,24 @@ public sealed class DatabaseMigratorTests
     }
 
     [TestMethod]
+    public async Task An_existing_user_with_another_identity_is_refused()
+    {
+        // An Entra app user is created from its client ID, which becomes its SID. If a user with
+        // that name already exists with another SID, another identity holds the name and must not
+        // be granted app_data. (TYPE = E users exist only in Azure SQL; any other user with the
+        // name has a different SID, which is what this checks. The matching case runs in Azure.)
+        var database = await SqlServer.CreateDatabaseAsync();
+        var migrator = new DatabaseMigrator(database, TextWriter.Null);
+        migrator.Run(appUser: null);
+        await SqlServer.ExecuteAsync(database, $"CREATE USER [id-financegoals-api] WITH PASSWORD = '{SqlServer.NewPassword()}';");
+
+        Should.Throw<SqlException>(() => migrator.EnsureAppUser(AppUser.FromEntra("id-financegoals-api", Guid.NewGuid())))
+            .Number.ShouldBe(50004);
+
+        (await AppDataMembersAsync(database)).ShouldBeEmpty();
+    }
+
+    [TestMethod]
     public async Task Every_constraint_is_named()
     {
         // SQL Server gives an unnamed constraint a random name, so an upgraded database and a

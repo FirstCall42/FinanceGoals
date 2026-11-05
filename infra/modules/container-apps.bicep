@@ -17,6 +17,8 @@ param apiClientId string
 param migratorIdentityId string
 param migratorClientId string
 param sqlServerFqdn string
+@description('The web app origin (Static Web App URL), the only origin the API accepts cross-origin requests from.')
+param webOrigin string
 param databaseName string
 param tags object
 
@@ -104,6 +106,7 @@ resource api 'Microsoft.App/containerApps@2024-03-01' = {
           env: [
             { name: 'ASPNETCORE_ENVIRONMENT', value: aspNetCoreEnvironment }
             { name: 'ConnectionStrings__App', value: '${sqlConnection};User Id=${apiClientId}' }
+            { name: 'Cors__AllowedOrigins__0', value: webOrigin }
           ]
           probes: isPlaceholder ? [] : apiProbes
         }
@@ -150,6 +153,8 @@ resource migrator 'Microsoft.App/jobs@2024-03-01' = {
             { name: 'ConnectionStrings__SchemaOwner', value: '${sqlConnection};User Id=${migratorClientId}' }
             { name: 'Migrator__AppUser', value: apiIdentityName }
             { name: 'Migrator__AppUserKind', value: 'entra' }
+            // The API user is created from its client ID (WITH SID), so SQL never looks names up in Entra.
+            { name: 'Migrator__AppUserClientId', value: apiClientId }
           ]
         }
       ]
@@ -159,3 +164,4 @@ resource migrator 'Microsoft.App/jobs@2024-03-01' = {
 
 output apiUrl string = 'https://${api.properties.configuration.ingress.fqdn}'
 output migratorJobName string = migrator.name
+output apiName string = api.name

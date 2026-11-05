@@ -22,6 +22,7 @@ public sealed class ProgramTests
     [TestMethod]
     [DataRow("Migrator__AppUserKind", "password")]
     [DataRow("Migrator__AppUserPassword", "Pw1!x")]
+    [DataRow("Migrator__AppUserClientId", "7cf7c15a-2f50-4610-bd13-86a3012da730")]
     public async Task App_user_settings_without_an_app_user_log_a_warning(string setting, string value)
     {
         var database = await SqlServer.CreateDatabaseAsync();
@@ -34,7 +35,7 @@ public sealed class ProgramTests
 
         result.ExitCode.ShouldBe(0, result.ToString());
         result.Output.ShouldContain(
-            "WARNING: Migrator__AppUserKind or Migrator__AppUserPassword is set but Migrator__AppUser is not; no app user step.");
+            "WARNING: Migrator__AppUserKind, Migrator__AppUserPassword or Migrator__AppUserClientId is set but Migrator__AppUser is not; no app user step.");
         (await SqlServer.QueryAsync(database, """
             SELECT COUNT(*) FROM sys.database_role_members WHERE role_principal_id = DATABASE_PRINCIPAL_ID(N'app_data')
             """)).ShouldBe(["0"]);
