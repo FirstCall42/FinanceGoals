@@ -16,8 +16,30 @@ public sealed class DatabaseMigratorTests
         result.Migrations.ShouldBe(migrator.EmbeddedScripts(DatabaseMigrator.Folder.Migrations));
         result.Repeatable.ShouldBe(migrator.EmbeddedScripts(DatabaseMigrator.Folder.Repeatable));
         result.Seeds.ShouldBe(migrator.EmbeddedScripts(DatabaseMigrator.Folder.Seed));
-        (await SqlServer.QueryAsync(database, "SELECT Code FROM app.Currency ORDER BY Code"))
-            .ShouldBe(["EUR", "NOK", "RON", "USD"]);
+        (await SqlServer.QueryAsync(database, "SELECT COUNT(*) FROM app.Currency")).ShouldBe(["165"]);
+    }
+
+    [TestMethod]
+    public async Task Iso_seed_adds_every_currency_and_corrects_the_first_seed()
+    {
+        // S0001 inserted four currencies with informal names; S0002 upserts all of ISO 4217 list one.
+        var database = await SqlServer.CreateDatabaseAsync();
+        new DatabaseMigrator(database, TextWriter.Null).Run(appUser: null);
+
+        (await SqlServer.QueryAsync(database, """
+            SELECT Code, NumericCode, MinorUnits, Name FROM app.Currency
+            WHERE Code IN ('NOK', 'EUR', 'USD', 'RON', 'JPY', 'BHD', 'CLF') ORDER BY Code
+            """)).ShouldBe([
+                "BHD|48|3|Bahraini Dinar",
+                "CLF|990|4|Unidad de Fomento",
+                "EUR|978|2|Euro",
+                "JPY|392|0|Yen",
+                "NOK|578|2|Norwegian Krone",
+                "RON|946|2|Romanian Leu",
+                "USD|840|2|US Dollar",
+            ]);
+        (await SqlServer.QueryAsync(database, "SELECT Name FROM app.Currency WHERE Code = 'VES'"))
+            .ShouldBe(["Bolívar Soberano"]);
     }
 
     [TestMethod]
@@ -32,7 +54,7 @@ public sealed class DatabaseMigratorTests
         before.ShouldContain("permission|app_data|SELECT|GRANT|SCHEMA:app|grantor=dbo");
         before.ShouldContain("journal|SeedVersions|seed/S0001_household_currencies.sql");
         before.ShouldContain(row => row.StartsWith("column|app.Currency.Code|position=1|char(3,", StringComparison.Ordinal));
-        before.ShouldContain(row => row.StartsWith("data|[app].[Currency]|4|", StringComparison.Ordinal));
+        before.ShouldContain(row => row.StartsWith("data|[app].[Currency]|165|", StringComparison.Ordinal));
 
         var second = migrator.Run(appUser);
 
@@ -81,7 +103,7 @@ public sealed class DatabaseMigratorTests
         migrator.Run(AppUser.WithPassword("financegoals_app", rotated));
 
         (await SqlServer.QueryAsync(SqlServer.As(database, "financegoals_app", rotated), "SELECT COUNT(*) FROM app.Currency"))
-            .ShouldBe(["4"]);
+            .ShouldBe(["165"]);
     }
 
     // Each row expects the guard's own error number, so a row cannot pass because some other
@@ -193,11 +215,11 @@ public sealed class DatabaseMigratorTests
         new DatabaseMigrator(database, TextWriter.Null).Run(AppUser.WithPassword("financegoals_app", password));
         var app = SqlServer.As(database, "financegoals_app", password);
 
-        (await SqlServer.QueryAsync(app, "SELECT COUNT(*) FROM app.Currency")).ShouldBe(["4"]);
+        (await SqlServer.QueryAsync(app, "SELECT COUNT(*) FROM app.Currency")).ShouldBe(["165"]);
         await SqlServer.ExecuteAsync(app, """
-            INSERT INTO app.Currency (Code, NumericCode, MinorUnits, Name) VALUES ('SEK', 752, 2, N'Swedish krona');
-            UPDATE app.Currency SET Name = N'Swedish krona' WHERE Code = 'SEK';
-            DELETE FROM app.Currency WHERE Code = 'SEK';
+            INSERT INTO app.Currency (Code, NumericCode, MinorUnits, Name) VALUES ('QQQ', 1, 2, N'Test currency');
+            UPDATE app.Currency SET Name = N'Test currency 2' WHERE Code = 'QQQ';
+            DELETE FROM app.Currency WHERE Code = 'QQQ';
             """);
 
         await Should.ThrowAsync<SqlException>(
