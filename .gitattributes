@@ -4,6 +4,6 @@
 *.sql text eol=lf
 # Written by the build with LF; keep the checkout the same so a build does not dirty it.
 src/FinanceGoals.Api/openapi/*.json text eol=lf
-# Prettier expects LF; keep web/ LF on Windows checkouts too.
-web/** text eol=lf
-web/**/*.ico binary
+# Prettier expects LF; keep web/ text files LF on Windows checkouts too. text=auto lets git
+# detect binaries (images, fonts) and leave them untouched.
+web/** text=auto eol=lf

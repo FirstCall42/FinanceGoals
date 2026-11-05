@@ -71,4 +71,22 @@ describe('HealthStatus', () => {
     expect(checks).toBe(2);
     expect(text(element, 'api')).toBe('OK');
   });
+
+  it('disables "Check again" while a check is running', async () => {
+    let finish: (health: ApiHealth) => void = () => undefined;
+    TestBed.overrideProvider(HealthService, {
+      useValue: { check: () => new Promise<ApiHealth>((resolve) => (finish = resolve)) },
+    });
+    const fixture = TestBed.createComponent(HealthStatus);
+    fixture.detectChanges();
+    const button = (fixture.nativeElement as HTMLElement).querySelector('button')!;
+
+    expect(button.disabled).toBe(true);
+
+    finish({ api: 'up', database: 'up' });
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(button.disabled).toBe(false);
+    });
+  });
 });

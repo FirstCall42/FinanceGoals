@@ -12,6 +12,8 @@ describe('App routes', () => {
     });
   });
 
+  afterEach(() => TestBed.inject(HttpTestingController).verify());
+
   it('home page shows the API health', async () => {
     const harness = await RouterTestingHarness.create('/');
     const http = TestBed.inject(HttpTestingController);
@@ -30,7 +32,12 @@ describe('App routes', () => {
   it('unknown paths go to the home page', async () => {
     const harness = await RouterTestingHarness.create('/no-such-page');
 
-    expect(TestBed.inject(HttpTestingController).match(() => true).length).toBe(2);
+    const requests = TestBed.inject(HttpTestingController).match(() => true);
+    expect(requests.map((request) => request.request.url).sort()).toEqual([
+      '/health/live',
+      '/health/ready',
+    ]);
+    requests.forEach((request) => request.flush('Healthy'));
     expect((harness.routeNativeElement as HTMLElement).querySelector('h2')?.textContent).toBe(
       'API health',
     );

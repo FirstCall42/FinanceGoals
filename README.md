@@ -55,7 +55,7 @@ Logs are JSON lines on standard output (Serilog), with levels set in the `Serilo
 
 ## Web
 
-Requires Node.js 24 or later (`web/.nvmrc`; CI uses 24).
+Requires Node.js 24.15 or later (`web/.nvmrc`; CI uses the latest 24).
 
 ```sh
 cd web
