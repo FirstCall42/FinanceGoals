@@ -141,6 +141,21 @@ for env in "${ENVIRONMENTS[@]}"; do
   lock_environment "$env"
 done
 
+echo "== Resource providers"
+# A new subscription has managed identities switched off until the provider is registered (free).
+for namespace in Microsoft.ManagedIdentity; do
+  state="NotRegistered"
+  if [ -n "$AZ_SIGNED_IN" ]; then
+    state=$(az provider show --namespace "$namespace" --query registrationState -o tsv)
+  fi
+  if [ "$state" = "Registered" ]; then
+    echo "registered: $namespace"
+  else
+    run az provider register --namespace "$namespace" --wait --output none
+    echo "$( [ -n "$DRY_RUN" ] && echo "would register" || echo "registered"): $namespace"
+  fi
+done
+
 echo "== Resource groups ($LOCATION)"
 for rg in "$SHARED_RG" "${RESOURCE_GROUP[test]}" "${RESOURCE_GROUP[production]}"; do
   if [ -n "$AZ_SIGNED_IN" ] && [ "$(az group exists --name "$rg")" = "true" ]; then
