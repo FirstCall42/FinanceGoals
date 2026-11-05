@@ -39,6 +39,13 @@ label "area: goals"      "fbca04" "Savings goals"
 label "area: households" "fbca04" "Household profiles, members and sign-in"
 label "area: infra"      "fbca04" "Build, CI/CD, hosting, database deploys"
 
+# GitHub's default labels that overlap with the ones above.
+for unused in "enhancement" "documentation" "good first issue" "help wanted" "question"; do
+  if gh label delete "$unused" --repo "$REPO" --yes >/dev/null 2>&1; then
+    echo "removed default label: $unused"
+  fi
+done
+
 echo "== Milestones"
 milestone() {
   local title="$1" desc="$2" count
@@ -60,7 +67,10 @@ milestone "Phase 4: Savings goals"                   "Targets, progress, require
 milestone "Phase 5: Insights"                        "Dashboard, currency effects vs real growth, goal timeline"
 
 echo "== Ruleset for main"
-existing=$(gh api "repos/$REPO/rulesets" --jq '.[] | select(.name == "main") | .id' 2>/dev/null || true)
+existing=""
+if listed=$(gh api "repos/$REPO/rulesets" --jq '.[] | select(.name == "main") | .id' 2>/dev/null); then
+  existing="$listed"
+fi
 if [ -n "$existing" ]; then
   method=PUT; path="repos/$REPO/rulesets/$existing"
 else
