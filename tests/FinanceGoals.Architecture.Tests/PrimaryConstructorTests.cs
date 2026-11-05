@@ -52,18 +52,61 @@ public sealed class PrimaryConstructorTests
         FindPrimaryConstructors(source).ShouldBeEmpty();
     }
 
-    private static List<string> FindPrimaryConstructors(string source) =>
-        CSharpSyntaxTree.ParseText(source).GetRoot()
-            .DescendantNodes()
-            .OfType<TypeDeclarationSyntax>()
-            .Where(type => type is ClassDeclarationSyntax or StructDeclarationSyntax && type.ParameterList is not null)
-            .Select(type => type.Identifier.Text)
+    [TestMethod]
+    public void Finds_primary_constructors_in_conditional_code()
+    {
+        const string source = """
+            #if NEVER_DEFINED
+            public sealed class Hidden(int x) { }
+            #else
+            public sealed class Shown(int x) { }
+            #endif
+            """;
+
+        FindPrimaryConstructors(source).ShouldBe(["Hidden", "Shown"], ignoreOrder: true);
+    }
+
+    [TestMethod]
+    [DataRow("FinanceGoals.Domain/bin/Release/net10.0/Generated.cs", true)]
+    [DataRow("FinanceGoals.Api/obj/Debug/Generated.cs", true)]
+    [DataRow("FinanceGoals.Domain/Accounts/Account.cs", false)]
+    [DataRow("FinanceGoals.Domain/Binding/Account.cs", false)]
+    public void Skips_only_build_output_inside_src(string relativePath, bool skipped)
+    {
+        IsBuildOutput(Path.Combine(RepositoryRoot.SourceDirectory, relativePath)).ShouldBe(skipped);
+    }
+
+    /// <summary>
+    /// Parses twice, with every preprocessor symbol the file mentions defined and with none, so
+    /// both sides of an #if are seen whatever the build configuration.
+    /// </summary>
+    private static List<string> FindPrimaryConstructors(string source)
+    {
+        var symbols = CSharpSyntaxTree.ParseText(source).GetRoot()
+            .DescendantTrivia()
+            .Select(trivia => trivia.GetStructure())
+            .OfType<ConditionalDirectiveTriviaSyntax>()
+            .SelectMany(directive => directive.Condition.DescendantNodesAndSelf().OfType<IdentifierNameSyntax>())
+            .Select(identifier => identifier.Identifier.Text)
+            .Distinct()
+            .ToArray();
+
+        return new[] { symbols, [] }
+            .SelectMany(defined => CSharpSyntaxTree
+                .ParseText(source, CSharpParseOptions.Default.WithPreprocessorSymbols(defined))
+                .GetRoot()
+                .DescendantNodes()
+                .OfType<TypeDeclarationSyntax>()
+                .Where(type => type is ClassDeclarationSyntax or StructDeclarationSyntax && type.ParameterList is not null)
+                .Select(type => type.Identifier.Text))
+            .Distinct()
             .ToList();
+    }
 
     private static bool IsBuildOutput(string path)
     {
-        var separators = new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar };
-        var parts = path.Split(separators);
+        var relative = Path.GetRelativePath(RepositoryRoot.SourceDirectory, path);
+        var parts = relative.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         return parts.Contains("bin") || parts.Contains("obj");
     }
 }
