@@ -13,6 +13,10 @@ builder.Services.AddSerilog((services, logger) => ApiLogging.Configure(
 builder.Services.AddOpenApi();
 builder.Services.AddHealthChecks().AddDatabaseHealthCheck();
 builder.Services.AddInfrastructure();
+if (builder.Configuration.GetValue(ExchangeRateImportService.EnabledSetting, defaultValue: true))
+{
+    builder.Services.AddHostedService<ExchangeRateImportService>();
+}
 
 // Unhandled errors become a ProblemDetails 500; the exception is logged, never sent to the client.
 builder.Services.AddProblemDetails();

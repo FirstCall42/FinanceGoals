@@ -22,6 +22,7 @@
   <ItemGroup>
     <InternalsVisibleTo Include="FinanceGoals.Migrator.Tests" />
     <InternalsVisibleTo Include="FinanceGoals.Api.Tests" />
+    <InternalsVisibleTo Include="FinanceGoals.Infrastructure.Tests" />
   </ItemGroup>
 
 </Project>

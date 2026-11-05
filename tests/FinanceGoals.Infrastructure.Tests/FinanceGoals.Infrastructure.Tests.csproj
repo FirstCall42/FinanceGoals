@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="Testcontainers.MsSql" />
+    <PackageReference Include="WireMock.Net" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\FinanceGoals.Infrastructure\FinanceGoals.Infrastructure.csproj" />
+    <!-- Builds test databases the way a deployment does. Aliased: its top-level Program is internal. -->
+    <ProjectReference Include="..\..\src\FinanceGoals.Migrator\FinanceGoals.Migrator.csproj" Aliases="migrator" />
+  </ItemGroup>
+
+  <!-- One SQL Server container per test run; shared with the migrator and API tests. -->
+  <ItemGroup>
+    <Compile Include="..\FinanceGoals.Migrator.Tests\SqlServer.cs" Link="SqlServer.cs" />
+  </ItemGroup>
+
+</Project>
