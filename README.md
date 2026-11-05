@@ -43,8 +43,10 @@ ConnectionStrings__App="Server=...;User ID=financegoals_app;..." dotnet run --pr
 | Endpoint | Meaning |
 | --- | --- |
 | `GET /health/live` | The process answers. Runs no checks and never touches the database, so a database outage doesn't restart the API |
-| `GET /health/ready` | The API can serve requests: it can connect to the database with `ConnectionStrings__App`. `503` otherwise |
+| `GET /health/ready` | The API can serve requests: it can connect to the database with `ConnectionStrings__App`. `503` otherwise. Wakes the database; see the cost note below |
 | `GET /openapi/v1.json` | The OpenAPI document, in Development only |
+
+**Cost: don't probe readiness often.** Every `/health/ready` call opens a database connection. The Azure SQL free offer is serverless, with 100,000 vCore-seconds a month, and it auto-pauses only when idle. A readiness probe every few seconds keeps it awake around the clock (about 1.3 million vCore-seconds a month at the 0.5 vCore minimum), so the allowance runs out in 2–3 days and the database then pauses or bills. In Container Apps, use `/health/live` for the liveness and readiness probes, and `/health/ready` only as the startup probe and for the post-deploy smoke test. Uptime monitors use `/health/live` only (#22).
 
 The build writes the OpenAPI document to `src/FinanceGoals.Api/openapi/FinanceGoals.Api.json`. It is committed, so API changes show in the pull request diff.
 

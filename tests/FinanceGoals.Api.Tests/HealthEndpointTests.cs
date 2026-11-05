@@ -1,30 +1,14 @@
+extern alias migrator;
 using System.Net;
-using Testcontainers.MsSql;
+using FinanceGoals.Migrator.Tests;
+using migrator::FinanceGoals.Migrator;
 
 namespace FinanceGoals.Api.Tests;
 
 [TestClass]
 public sealed class HealthEndpointTests
 {
-    private const string _image = "mcr.microsoft.com/mssql/server:2022-CU27-ubuntu-22.04";
-
-    private static MsSqlContainer? _sqlServer;
-
-    [ClassInitialize]
-    public static async Task StartAsync(TestContext context)
-    {
-        _sqlServer = new MsSqlBuilder(_image).Build();
-        await _sqlServer.StartAsync(context.CancellationToken);
-    }
-
-    [ClassCleanup]
-    public static async Task StopAsync()
-    {
-        if (_sqlServer is not null)
-        {
-            await _sqlServer.DisposeAsync();
-        }
-    }
+    private const string _appUser = "financegoals_app";
 
     [TestMethod]
     [DataRow(ApiFactory.UnreachableDatabase)]
@@ -51,14 +35,16 @@ public sealed class HealthEndpointTests
         var response = await api.CreateClient().GetAsync(new Uri("/health/ready", UriKind.Relative));
 
         response.StatusCode.ShouldBe(HttpStatusCode.ServiceUnavailable);
-        var body = await response.Content.ReadAsStringAsync();
-        body.ShouldBe("Unhealthy");
+        (await response.Content.ReadAsStringAsync()).ShouldBe("Unhealthy");
     }
 
     [TestMethod]
-    public async Task Readiness_is_healthy_when_the_database_answers()
+    public async Task Readiness_is_healthy_as_the_app_user_on_a_migrated_database()
     {
-        await using var api = new ApiFactory(SqlServer.GetConnectionString());
+        // As deployed: a contained database migrated by the real scripts, and the API signed in
+        // as the app user the migrator created, not as sa.
+        var (database, password) = await MigratedDatabaseAsync();
+        await using var api = new ApiFactory(SqlServer.As(database, _appUser, password));
 
         var response = await api.CreateClient().GetAsync(new Uri("/health/ready", UriKind.Relative));
 
@@ -66,6 +52,22 @@ public sealed class HealthEndpointTests
         (await response.Content.ReadAsStringAsync()).ShouldBe("Healthy");
     }
 
-    private static MsSqlContainer SqlServer =>
-        _sqlServer ?? throw new InvalidOperationException("The SQL Server container has not started.");
+    [TestMethod]
+    public async Task Readiness_fails_when_the_app_user_cannot_sign_in()
+    {
+        var (database, _) = await MigratedDatabaseAsync();
+        await using var api = new ApiFactory(SqlServer.As(database, _appUser, SqlServer.NewPassword()));
+
+        var response = await api.CreateClient().GetAsync(new Uri("/health/ready", UriKind.Relative));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.ServiceUnavailable);
+    }
+
+    private static async Task<(string Database, string Password)> MigratedDatabaseAsync()
+    {
+        var database = await SqlServer.CreateDatabaseAsync();
+        var password = SqlServer.NewPassword();
+        new DatabaseMigrator(database, TextWriter.Null).Run(AppUser.WithPassword(_appUser, password));
+        return (database, password);
+    }
 }

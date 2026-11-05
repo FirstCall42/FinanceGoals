@@ -5,7 +5,10 @@ using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddSerilog((_, logger) => ApiLogging.Configure(logger, builder.Configuration, Console.Out));
+builder.Services.AddSerilog((services, logger) => ApiLogging.Configure(
+    logger,
+    builder.Configuration,
+    services.GetService<ApiLogging.Output>()?.Writer ?? Console.Out));
 builder.Services.AddOpenApi();
 builder.Services.AddHealthChecks().AddDatabaseHealthCheck();
 

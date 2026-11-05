@@ -7,6 +7,15 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\FinanceGoals.Api\FinanceGoals.Api.csproj" />
+    <!-- Builds test databases the way a deployment does, with the real DbUp scripts. Aliased:
+         the migrator has its own top-level Program, which would clash with the API's. -->
+    <ProjectReference Include="..\..\src\FinanceGoals.Migrator\FinanceGoals.Migrator.csproj" Aliases="migrator" />
+  </ItemGroup>
+
+  <!-- One SQL Server container per test run, with contained databases owned by a schema
+       owner; shared with the migrator tests until the integration harness (#10) replaces it. -->
+  <ItemGroup>
+    <Compile Include="..\FinanceGoals.Migrator.Tests\SqlServer.cs" Link="SqlServer.cs" />
   </ItemGroup>
 
 </Project>
