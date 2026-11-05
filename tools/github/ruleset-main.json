@@ -27,7 +27,9 @@
         "required_status_checks": [
           { "context": "Linked issue" },
           { "context": "Conventional title" },
-          { "context": "Type label" }
+          { "context": "Type label" },
+          { "context": "Human approval", "integration_id": "__GATES_APP_ID__" },
+          { "context": "AI review", "integration_id": "__GATES_APP_ID__" }
         ]
       }
     }
