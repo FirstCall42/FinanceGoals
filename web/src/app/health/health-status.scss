@@ -1,0 +1,23 @@
+// Deliberately plain: the shared look comes with the UI foundations (#78).
+dl {
+  display: grid;
+  grid-template-columns: max-content auto;
+  gap: 0.25rem 1rem;
+}
+
+dt {
+  font-weight: 600;
+}
+
+dd {
+  margin: 0;
+
+  &[data-state='up'] {
+    color: #1a7f37;
+  }
+
+  &[data-state='down'],
+  &[data-state='unreachable'] {
+    color: #cf222e;
+  }
+}

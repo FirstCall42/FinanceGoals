@@ -10,6 +10,13 @@ The backlog lives in GitHub issues, grouped by phase milestones. `tools/github/b
 dotnet build
 dotnet format --verify-no-changes
 dotnet test
+
+cd web
+npm ci
+npm run lint
+npm run format:check   # npm run format to fix
+npm test
+npm run build
 ```
 
 ## Layout
@@ -20,6 +27,7 @@ dotnet test
 - `src/FinanceGoals.Api`: Minimal API. References Application and Infrastructure.
 - `src/FinanceGoals.Migrator`: DbUp console app that applies the database scripts. Stands alone.
 - `tests/`: one test project per layer.
+- `web/`: Angular app (standalone components, zoneless, signals). Vitest for unit tests, ESLint and Prettier.
 
 ## C# conventions
 
@@ -30,6 +38,13 @@ dotnet test
 - NuGet versions go in `Directory.Packages.props`, never in a `.csproj`. Settings shared by all projects go in `Directory.Build.props`, and shared test settings in `tests/Directory.Build.props`.
 
 `.editorconfig` enforces the namespace and naming rules in the build. Primary constructors have no built-in rule, so check for them yourself.
+
+## Web conventions
+
+- Standalone components with signals; no NgModules, no zone.js.
+- Prettier formats everything in `web/`; `npm run format:check` runs in CI.
+- The app calls the API with relative paths. `ng serve` proxies them to the local API (`web/proxy.conf.json`).
+- PRs that change the UI need the owner to review screenshots or a preview. Tick the PR template item only after the owner says so.
 
 ## Tests
 

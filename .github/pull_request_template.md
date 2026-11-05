@@ -13,3 +13,4 @@ Closes #
 - [ ] New migration scripts are guarded and idempotent; no merged script was edited
 - [ ] API client regenerated (if the API changed)
 - [ ] Docs or ADR updated (if a design decision changed)
+- [ ] UI reviewed by the owner, from screenshots or a preview (if the UI changed). Tick only after the owner says so
