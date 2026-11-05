@@ -15,7 +15,8 @@ permissions:
 
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # Superseded PR runs are cancelled; every commit on main keeps its own result.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   dotnet:
@@ -57,11 +58,19 @@ jobs:
             if [ ${#files[@]} -eq 0 ]; then
               echo "No coverage files found."
             else
-              echo "| Test project | Line coverage |"
-              echo "| --- | --- |"
+              echo "| Test project | Lines covered | Line coverage |"
+              echo "| --- | --- | --- |"
               for f in "${files[@]}"; do
-                rate=$(grep -o '<coverage line-rate="[^"]*"' "$f" | head -n1 | grep -o '[0-9.]*$' || echo 0)
-                echo "| $(basename "$f" .cobertura.xml) | $(awk -v r="$rate" 'BEGIN { printf "%.1f%%", r * 100 }') |"
+                coverage=$(grep -o '<coverage [^>]*>' "$f" | head -n1)
+                # Attributes whose value is 0 are omitted from the file.
+                covered=$(printf '%s' "$coverage" | sed -n 's/.* lines-covered="\([0-9]*\)".*/\1/p')
+                covered=${covered:-0}
+                valid=$(printf '%s' "$coverage" | sed -n 's/.* lines-valid="\([0-9]*\)".*/\1/p')
+                if [ "${valid:-0}" -eq 0 ]; then
+                  echo "| $(basename "$f" .cobertura.xml) | 0 / 0 | n/a (no code measured) |"
+                else
+                  echo "| $(basename "$f" .cobertura.xml) | $covered / $valid | $(awk -v c="$covered" -v v="$valid" 'BEGIN { printf "%.1f%%", c * 100 / v }') |"
+                fi
               done
             fi
           } >> "$GITHUB_STEP_SUMMARY"
