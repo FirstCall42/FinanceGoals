@@ -117,3 +117,14 @@ tools/azure/setup-github-oidc.sh FirstCall42/FinanceGoals             # default 
 Then run **Actions > Azure sign-in check** from `main`. Each environment signs in, reaches its own resource group, and is refused the other.
 
 Everything the script creates is free: resource groups, managed identities, federated credentials and role assignments.
+
+### Cost guardrails
+
+A monthly budget of 1 (billing currency) on the subscription emails the Owners on any charge:
+
+```sh
+tools/azure/setup-budget.sh --email <address> [--email <another>] --dry-run
+tools/azure/setup-budget.sh --email <address> [--email <another>]
+```
+
+[docs/free-tier.md](docs/free-tier.md) lists the free allowances we rely on, what happens at each limit, what is not free (Key Vault), and how to check usage. Uptime monitors call `/health/live` only, at most once an hour.
