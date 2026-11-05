@@ -161,14 +161,14 @@ Probes call `/health/live` only; see docs/free-tier.md for why.
 
 ### Deploys
 
-Every push to `main` deploys that commit to test, from the Release workflow's **Deploy to test** job. It signs in with OIDC and then:
+Every push to `main` deploys that commit to test, from the Release workflow's **Deploy to test** job. Docs-only changes don't deploy, and a commit that is no longer the head of `main` is skipped, so an older commit never overwrites a newer one. The job signs in with OIDC and then:
 
-1. **Drift check:** Bicep what-if against what runs now, shown in the run summary. A deploy that would delete a resource stops here.
+1. **Drift check:** Bicep what-if against what runs now, shown in the run summary. Resources in the resource group that `infra/` doesn't define are flagged as a warning. Deploys are incremental, so nothing is deleted.
 2. **Infrastructure:** deploys `infra/` with the new migrator image. The API keeps its running image.
 3. **Migrator:** runs the migrator job and waits for it to succeed.
 4. **API:** deploys again with the new API image.
 5. **Web:** copies the files out of the web image, writes `config.json` with the API's URL, and uploads them to Static Web Apps. The deployment token is read at deploy time, never stored.
-6. **Smoke tests:** `/health/ready` (once per deploy, since it wakes the free database), `/api/currencies`, the web page, its `config.json`, and CORS from the web origin to the API.
+6. **Smoke tests:** `/health/ready`, `/api/currencies`, the web page, its `config.json`, and CORS from the web origin to the API. With the migrator they wake the free database once per deploy.
 
 To redeploy the current `main`, run the Release workflow by hand (Actions > Release > Run workflow).
 
