@@ -11,7 +11,7 @@
     <ProjectReference Include="..\..\src\FinanceGoals.Migrator\FinanceGoals.Migrator.csproj" Aliases="migrator" />
   </ItemGroup>
 
-  <!-- One SQL Server container per test run; shared with the migrator and API tests. -->
+  <!-- One SQL Server container for this test run (the helper is shared with the migrator and API tests). -->
   <ItemGroup>
     <Compile Include="..\FinanceGoals.Migrator.Tests\SqlServer.cs" Link="SqlServer.cs" />
   </ItemGroup>

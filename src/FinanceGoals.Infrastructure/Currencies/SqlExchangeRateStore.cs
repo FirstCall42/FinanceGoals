@@ -12,7 +12,7 @@ internal sealed class SqlExchangeRateStore : IExchangeRateStore
     // Only currencies the app knows (app.Currency); the ECB list could in theory gain a code first.
     // An unchanged rate is not touched, so a rerun for the same day changes nothing.
     private const string _mergeSql = """
-        MERGE app.ExchangeRate AS target
+        MERGE app.ExchangeRate WITH (HOLDLOCK) AS target
         USING (SELECT i.CurrencyCode, i.RateDate, i.UnitsPerEur
                FROM #Incoming AS i
                WHERE EXISTS (SELECT 1 FROM app.Currency AS c WHERE c.Code = i.CurrencyCode)) AS source

@@ -1,50 +1,91 @@
+using System.Threading.Channels;
 using FinanceGoals.Application.Currencies;
 
 namespace FinanceGoals.Api;
 
 /// <summary>
-/// Imports the ECB rates when the API starts and every six hours while it runs. The API scales to
-/// zero when idle, so the import only runs while the app is in use: it never wakes the free
-/// database on its own (docs/free-tier.md). The 90-day feed fills any days that were missed.
-/// Turned off with ExchangeRates:ImportEnabled=false (the tests do).
+/// Signals that the API is serving real requests (/api/...), which use the database anyway, so an
+/// exchange-rate import can run without waking the free database on its own. Health checks and
+/// CORS preflights never signal (docs/free-tier.md: uptime pings must not wake the database).
+/// </summary>
+internal sealed class ExchangeRateImportTrigger
+{
+    private readonly Channel<bool> _signals = Channel.CreateBounded<bool>(
+        new BoundedChannelOptions(1) { FullMode = BoundedChannelFullMode.DropWrite });
+
+    /// <summary>True while a signal waits to be handled (for tests).</summary>
+    public bool IsPending => _signals.Reader.Count > 0;
+
+    public void Signal() => _signals.Writer.TryWrite(true);
+
+    public ValueTask<bool> WaitAsync(CancellationToken cancellationToken) => _signals.Reader.ReadAsync(cancellationToken);
+
+    /// <summary>Signals for API requests that reach the database, never for health checks or preflights.</summary>
+    public static bool ShouldSignal(HttpRequest request) =>
+        request.Path.StartsWithSegments("/api", StringComparison.OrdinalIgnoreCase)
+        && !HttpMethods.IsOptions(request.Method);
+}
+
+/// <summary>
+/// Imports the ECB rates when the app is in use: after an API request signals, it imports if the
+/// last successful import is more than 6 hours old (30 minutes after a failure). The 90-day feed
+/// fills any days that were missed. Turned off with ExchangeRates:ImportEnabled=false (the tests do).
 /// </summary>
 internal sealed partial class ExchangeRateImportService : BackgroundService
 {
     public const string EnabledSetting = "ExchangeRates:ImportEnabled";
 
-    private static readonly TimeSpan _interval = TimeSpan.FromHours(6);
+    internal static readonly TimeSpan AfterSuccess = TimeSpan.FromHours(6);
+    internal static readonly TimeSpan AfterFailure = TimeSpan.FromMinutes(30);
 
     private readonly IServiceProvider _services;
+    private readonly ExchangeRateImportTrigger _trigger;
+    private readonly TimeProvider _time;
     private readonly ILogger<ExchangeRateImportService> _logger;
+    private DateTimeOffset? _nextImport;
 
-    public ExchangeRateImportService(IServiceProvider services, ILogger<ExchangeRateImportService> logger)
+    public ExchangeRateImportService(
+        IServiceProvider services,
+        ExchangeRateImportTrigger trigger,
+        TimeProvider time,
+        ILogger<ExchangeRateImportService> logger)
     {
         _services = services;
+        _trigger = trigger;
+        _time = time;
         _logger = logger;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        using var timer = new PeriodicTimer(_interval);
-        do
+        while (!stoppingToken.IsCancellationRequested)
         {
-            await ImportOnceAsync(stoppingToken);
+            await _trigger.WaitAsync(stoppingToken);
+            await ImportIfDueAsync(stoppingToken);
         }
-        while (await timer.WaitForNextTickAsync(stoppingToken));
     }
 
-    internal async Task ImportOnceAsync(CancellationToken cancellationToken)
+    /// <summary>Imports unless the next import isn't due yet. Never throws, except when the API stops.</summary>
+    internal async Task ImportIfDueAsync(CancellationToken cancellationToken)
     {
+        var now = _time.GetUtcNow();
+        if (_nextImport is { } next && now < next)
+        {
+            return;
+        }
+
         try
         {
             var result = await _services.GetRequiredService<ExchangeRateImport>().RunAsync(cancellationToken);
             LogImported(result.Fetched, result.Changed);
+            _nextImport = now + AfterSuccess;
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
         {
-            // A failed import must not stop the API; the next run (or a restart) tries again, and
-            // conversions keep using the latest stored rate.
+            // Includes HttpClient timeouts (TaskCanceledException). A failed import must not stop the
+            // API; conversions keep using the latest stored rate, and a later request retries.
             LogFailed(ex);
+            _nextImport = now + AfterFailure;
         }
     }
 

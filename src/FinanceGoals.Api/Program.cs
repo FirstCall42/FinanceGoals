@@ -13,6 +13,8 @@ builder.Services.AddSerilog((services, logger) => ApiLogging.Configure(
 builder.Services.AddOpenApi();
 builder.Services.AddHealthChecks().AddDatabaseHealthCheck();
 builder.Services.AddInfrastructure();
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<ExchangeRateImportTrigger>();
 if (builder.Configuration.GetValue(ExchangeRateImportService.EnabledSetting, defaultValue: true))
 {
     builder.Services.AddHostedService<ExchangeRateImportService>();
@@ -34,6 +36,17 @@ var app = builder.Build();
 app.UseExceptionHandler();
 app.UseSerilogRequestLogging(options => options.GetLevel = (context, _, error) => ApiLogging.RequestLevel(context, error));
 app.UseCors();
+
+// Real API requests use the database anyway; only they may start an exchange-rate import.
+app.Use((context, next) =>
+{
+    if (ExchangeRateImportTrigger.ShouldSignal(context.Request))
+    {
+        context.RequestServices.GetRequiredService<ExchangeRateImportTrigger>().Signal();
+    }
+
+    return next(context);
+});
 
 if (app.Environment.IsDevelopment())
 {
