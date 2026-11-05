@@ -114,8 +114,8 @@ public sealed class DatabaseMigratorTests
     [TestMethod]
     public async Task Refuses_the_connecting_user_even_when_it_is_not_in_db_owner()
     {
-        // A deployer with just enough rights to manage users. Only the USER_NAME() check stops it
-        // from naming itself: it has no roles, so the db_owner membership check cannot fire first.
+        // A deployer with just enough rights to manage users and no roles. Without the USER_NAME()
+        // check it would be refused with 50003 for its own grants; 50001 shows that check fired.
         var database = await SqlServer.CreateDatabaseAsync();
         new DatabaseMigrator(database, TextWriter.Null).Run(appUser: null);
         var password = SqlServer.NewPassword();

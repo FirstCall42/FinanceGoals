@@ -40,6 +40,7 @@ public sealed class UpgradePathTests
         var actual = await SchemaSnapshot.TakeAsync(upgraded, includeTimestamps: false);
         actual.Except(expected).ShouldBeEmpty("only in the upgraded database");
         expected.Except(actual).ShouldBeEmpty("only in the fresh build");
+        actual.ShouldBe(expected, "same rows, including duplicates");
     }
 
     [TestMethod]
