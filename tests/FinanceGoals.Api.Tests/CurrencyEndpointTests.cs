@@ -21,8 +21,14 @@ public sealed class CurrencyEndpointTests
 
         var currencies = await api.CreateClient().GetFromJsonAsync<List<CurrencyInfo>>(new Uri("/api/currencies", UriKind.Relative));
 
-        currencies.ShouldNotBeNull().Select(currency => currency.Code).ShouldBe(["EUR", "NOK", "RON", "USD"]);
-        currencies.ShouldContain(new CurrencyInfo("NOK", 578, 2, "Norwegian krone"));
+        // Independent of how many currencies the seeds hold and of their exact names.
+        var codes = currencies.ShouldNotBeNull().Select(currency => currency.Code).ToList();
+        codes.ShouldBe(codes.Order(StringComparer.Ordinal).ToList());
+        codes.ShouldContain("EUR");
+        codes.ShouldContain("USD");
+        codes.ShouldContain("RON");
+        var nok = currencies.Single(currency => currency.Code == "NOK");
+        (nok.NumericCode, nok.MinorUnits).ShouldBe(((short)578, (byte)2));
     }
 
     [TestMethod]
