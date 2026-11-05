@@ -118,6 +118,27 @@ Then run **Actions > Azure sign-in check** from `main`. Each environment signs i
 
 Everything the script creates is free: resource groups, managed identities, federated credentials and role assignments.
 
+### Infrastructure
+
+`infra/main.bicep` defines everything one environment runs on, and there is one parameter file per environment. Nothing is configured in the portal.
+
+| | test | production |
+| --- | --- | --- |
+| Region | `swedencentral` | `germanywestcentral` |
+| Database (free offer, auto-pause at the limit) | `financegoals-test` | `financegoals-prod` |
+| Static Web App (Free) | `eastus2` | `eastus2` |
+
+Each environment has a Log Analytics workspace, managed identities for the API and the migrator, an Azure SQL server with Entra-only sign-in (the migrator's identity is its admin), a free-offer database, a Container Apps environment with the API (scales to zero) and the migrator job, and a Static Web App. There is no Key Vault and no password: the API and the migrator sign in to SQL with their managed identities.
+
+```sh
+az deployment group what-if -g rg-financegoals-test -p infra/test.bicepparam   # preview
+az deployment group create  -g rg-financegoals-test -p infra/test.bicepparam
+```
+
+The API runs a placeholder image until the deploy workflow (#21) supplies real images (#20). Probes call `/health/live` only; see docs/free-tier.md for why.
+
+Regions are where this subscription is allowed to create things: in 2026-11 Norway East, West Europe and North Europe refused new SQL servers, West Europe refused new Static Web Apps, and the subscription allows one Container Apps environment per region. The resource groups themselves stay in `norwayeast`; their location is only metadata.
+
 ### Cost guardrails
 
 A monthly budget of 1 (billing currency) on the subscription emails the Owners on any charge:
