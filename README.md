@@ -43,15 +43,19 @@ The migrator connects as the **schema owner** (a `db_owner` user) and:
 3. runs the repeatable scripts,
 4. applies new seed scripts.
 
-Every script runs in its own transaction. Running the migrator again changes nothing.
+Every script runs in its own transaction. Running the migrator again changes nothing, except that a password app user's password is set again (so rotation works).
+
+The app user must be a dedicated single user: the migrator refuses `dbo`, `guest`, the schema owner, a role, an Entra group, or a user that has any other role or database permission or owns a schema, object or role.
 
 | Setting (environment variable) | Meaning |
 | --- | --- |
 | `ConnectionStrings__SchemaOwner` | Schema owner connection string (required) |
 | `Migrator__AppUser` | App user to create and grant `app_data` (optional) |
 | `Migrator__AppUserKind` | `password` (contained user) or `entra` (Entra ID user, e.g. the API's managed identity); required with `Migrator__AppUser` |
-| `Migrator__AppUserPassword` | Its password, for kind `password` only. Set on every run, so rotating it here takes effect |
+| `Migrator__AppUserPassword` | Its password, for kind `password` only. Set on every run, so rotating it here takes effect. Pass it as an environment variable, not `--Migrator:AppUserPassword=`, which shows in process listings |
 
 Locally the database must be contained (`CONTAINMENT = PARTIAL`) so users can have passwords; Docker Compose (#13) will set that up. The migrator tests do the same against SQL Server in Docker, so Docker must be running for `dotnet test`.
 
 On Azure SQL, creating an `entra` app user requires the migrator to sign in as an Entra principal (not a SQL user), and the server needs permission to look up Entra names. The Bicep templates (#18) and the deploy workflow (#21) cover this.
+
+CI checks every PR's database scripts (the "Database checks" job): merged migration and seed scripts must be unchanged, both on disk and as embedded in the migrator, and a database built by `main`'s migrator and then upgraded by the PR's must match a fresh build. There are no releases yet, so `main` stands in for the last release. To run these checks locally, build `main`'s migrator and point `FINANCEGOALS_BASE_MIGRATOR` at its `FinanceGoals.Migrator.dll`; without it the test reports inconclusive.

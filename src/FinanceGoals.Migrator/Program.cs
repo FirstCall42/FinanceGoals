@@ -25,6 +25,13 @@ try
         configuration["Migrator:AppUser"],
         configuration["Migrator:AppUserKind"],
         configuration["Migrator:AppUserPassword"]);
+    if (appUser is null)
+    {
+        var orphaned = configuration["Migrator:AppUserKind"] is not null || configuration["Migrator:AppUserPassword"] is not null;
+        Console.WriteLine(orphaned
+            ? "WARNING: Migrator__AppUserKind or Migrator__AppUserPassword is set but Migrator__AppUser is not; no app user step."
+            : "No Migrator__AppUser set; skipping the app user step.");
+    }
 
     var result = new DatabaseMigrator(connectionString, Console.Out).Run(appUser);
     Console.WriteLine(

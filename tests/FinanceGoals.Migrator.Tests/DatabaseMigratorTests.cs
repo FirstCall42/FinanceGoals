@@ -5,37 +5,6 @@ namespace FinanceGoals.Migrator.Tests;
 [TestClass]
 public sealed class DatabaseMigratorTests
 {
-    // Everything a migration can change: objects, principals, role membership, permissions,
-    // the journals and the seeded rows. Two runs must leave all of it identical.
-    // A contained database's catalog collation differs from its data collation, so every row is
-    // converted to one collation before the UNION.
-    private const string _snapshotSql = """
-        SELECT CONVERT(nvarchar(600), row) COLLATE Latin1_General_100_BIN2 AS row
-        FROM (
-            SELECT CONCAT('object|', SCHEMA_NAME(o.schema_id), '.', o.name, '|', o.type, '|', CONVERT(varchar(30), o.modify_date, 126)) AS row
-            FROM sys.objects AS o WHERE o.is_ms_shipped = 0
-            UNION ALL
-            SELECT CONCAT('principal|', p.name, '|', p.type)
-            FROM sys.database_principals AS p WHERE p.principal_id > 4 AND p.is_fixed_role = 0
-            UNION ALL
-            SELECT CONCAT('member|', r.name, '|', m.name)
-            FROM sys.database_role_members AS rm
-            JOIN sys.database_principals AS r ON r.principal_id = rm.role_principal_id
-            JOIN sys.database_principals AS m ON m.principal_id = rm.member_principal_id
-            UNION ALL
-            SELECT CONCAT('permission|', USER_NAME(dp.grantee_principal_id), '|', dp.permission_name, '|', dp.state_desc, '|',
-                dp.class_desc, ':', CASE dp.class WHEN 3 THEN SCHEMA_NAME(dp.major_id) WHEN 1 THEN OBJECT_NAME(dp.major_id) END)
-            FROM sys.database_permissions AS dp WHERE dp.grantee_principal_id > 4
-            UNION ALL
-            SELECT CONCAT('journal|SchemaVersions|', ScriptName) FROM dbo.SchemaVersions
-            UNION ALL
-            SELECT CONCAT('journal|SeedVersions|', ScriptName) FROM dbo.SeedVersions
-            UNION ALL
-            SELECT CONCAT('currency|', Code, '|', NumericCode, '|', MinorUnits, '|', Name) FROM app.Currency
-        ) AS snapshot (row)
-        ORDER BY 1;
-        """;
-
     [TestMethod]
     public async Task Fresh_database_gets_every_script()
     {
@@ -58,17 +27,18 @@ public sealed class DatabaseMigratorTests
         var appUser = AppUser.WithPassword("financegoals_app", SqlServer.NewPassword());
         var migrator = new DatabaseMigrator(database, TextWriter.Null);
         migrator.Run(appUser);
-        var before = await SqlServer.QueryAsync(database, _snapshotSql);
+        var before = await SchemaSnapshot.TakeAsync(database, includeTimestamps: true);
         before.ShouldContain("member|app_data|financegoals_app");
-        before.ShouldContain("permission|app_data|SELECT|GRANT|SCHEMA:app");
+        before.ShouldContain("permission|app_data|SELECT|GRANT|SCHEMA:app|grantor=dbo");
         before.ShouldContain("journal|SeedVersions|seed/S0001_household_currencies.sql");
-        before.ShouldContain("currency|NOK|578|2|Norwegian krone");
+        before.ShouldContain(row => row.StartsWith("column|app.Currency.Code|position=1|char(3,", StringComparison.Ordinal));
+        before.ShouldContain(row => row.StartsWith("data|[app].[Currency]|4|", StringComparison.Ordinal));
 
         var second = migrator.Run(appUser);
 
         second.Migrations.ShouldBeEmpty();
         second.Seeds.ShouldBeEmpty();
-        (await SqlServer.QueryAsync(database, _snapshotSql)).ShouldBe(before);
+        (await SchemaSnapshot.TakeAsync(database, includeTimestamps: true)).ShouldBe(before);
     }
 
     [TestMethod]
@@ -78,7 +48,7 @@ public sealed class DatabaseMigratorTests
         // script is renamed, the script's own guards must make a second run change nothing.
         var database = await SqlServer.CreateDatabaseAsync();
         new DatabaseMigrator(database, TextWriter.Null).Run(AppUser.WithPassword("financegoals_app", SqlServer.NewPassword()));
-        var before = await SqlServer.QueryAsync(database, _snapshotSql);
+        var before = await SchemaSnapshot.TakeAsync(database, includeTimestamps: true);
 
         var rerun = DbUp.DeployChanges.To
             .SqlDatabase(database)
@@ -97,7 +67,7 @@ public sealed class DatabaseMigratorTests
         rerun.Scripts.Count().ShouldBe(
             new DatabaseMigrator(database, TextWriter.Null).EmbeddedScripts(DatabaseMigrator.Folder.Migrations).Count
             + new DatabaseMigrator(database, TextWriter.Null).EmbeddedScripts(DatabaseMigrator.Folder.Seed).Count);
-        (await SqlServer.QueryAsync(database, _snapshotSql)).ShouldBe(before);
+        (await SchemaSnapshot.TakeAsync(database, includeTimestamps: true)).ShouldBe(before);
     }
 
     [TestMethod]
@@ -112,6 +82,94 @@ public sealed class DatabaseMigratorTests
 
         (await SqlServer.QueryAsync(SqlServer.As(database, "financegoals_app", rotated), "SELECT COUNT(*) FROM app.Currency"))
             .ShouldBe(["4"]);
+    }
+
+    // Each row expects the guard's own error number, so a row cannot pass because some other
+    // statement failed first (e.g. ALTER USER dbo WITH PASSWORD).
+    [TestMethod]
+    [DataRow("schema_owner", null, 50001)]
+    [DataRow("dbo", null, 50001)]
+    [DataRow("app_data", null, 50002)]
+    [DataRow("reporting", "CREATE USER reporting WITHOUT LOGIN; ALTER ROLE db_datareader ADD MEMBER reporting;", 50003)]
+    [DataRow("auditor", "CREATE USER auditor WITHOUT LOGIN; GRANT VIEW DEFINITION TO auditor;", 50003)]
+    [DataRow("keeper", "CREATE USER keeper WITHOUT LOGIN; EXEC (N'CREATE SCHEMA kept AUTHORIZATION keeper');", 50003)]
+    [DataRow("tableowner", "CREATE USER tableowner WITHOUT LOGIN; ALTER AUTHORIZATION ON OBJECT::app.Currency TO tableowner;", 50003)]
+    [DataRow("roleowner", "CREATE USER roleowner WITHOUT LOGIN; CREATE ROLE owned AUTHORIZATION roleowner;", 50003)]
+    public async Task Refuses_an_app_user_with_more_than_data_access(string name, string? setup, int error)
+    {
+        var database = await SqlServer.CreateDatabaseAsync();
+        var migrator = new DatabaseMigrator(database, TextWriter.Null);
+        migrator.Run(appUser: null);
+        if (setup is not null)
+        {
+            await SqlServer.ExecuteAsync(database, setup);
+        }
+
+        Should.Throw<SqlException>(() => migrator.Run(AppUser.WithPassword(name, SqlServer.NewPassword())))
+            .Number.ShouldBe(error);
+
+        (await AppDataMembersAsync(database)).ShouldBeEmpty();
+    }
+
+    [TestMethod]
+    public async Task Refuses_the_connecting_user_even_when_it_is_not_in_db_owner()
+    {
+        // A deployer with just enough rights to manage users and no roles. Without the USER_NAME()
+        // check it would be refused with 50003 for its own grants; 50001 shows that check fired.
+        var database = await SqlServer.CreateDatabaseAsync();
+        new DatabaseMigrator(database, TextWriter.Null).Run(appUser: null);
+        var password = SqlServer.NewPassword();
+        await SqlServer.ExecuteAsync(database, $"""
+            CREATE USER deployer WITH PASSWORD = '{password}';
+            GRANT ALTER ANY USER TO deployer;
+            GRANT ALTER ON ROLE::app_data TO deployer;
+            """);
+        var deployer = new DatabaseMigrator(SqlServer.As(database, "deployer", password), TextWriter.Null);
+
+        Should.Throw<SqlException>(() => deployer.EnsureAppUser(AppUser.WithPassword("deployer", SqlServer.NewPassword())))
+            .Number.ShouldBe(50001);
+
+        (await AppDataMembersAsync(database)).ShouldBeEmpty();
+        (await SqlServer.QueryAsync(SqlServer.As(database, "deployer", password), "SELECT USER_NAME()")).ShouldBe(["deployer"]);
+    }
+
+    [TestMethod]
+    public async Task A_deployer_without_db_owner_can_create_the_app_user()
+    {
+        // The positive case for the test above: the same deployer may create another user.
+        var database = await SqlServer.CreateDatabaseAsync();
+        new DatabaseMigrator(database, TextWriter.Null).Run(appUser: null);
+        var password = SqlServer.NewPassword();
+        await SqlServer.ExecuteAsync(database, $"""
+            CREATE USER deployer WITH PASSWORD = '{password}';
+            GRANT ALTER ANY USER TO deployer;
+            GRANT ALTER ON ROLE::app_data TO deployer;
+            """);
+
+        new DatabaseMigrator(SqlServer.As(database, "deployer", password), TextWriter.Null)
+            .EnsureAppUser(AppUser.WithPassword("financegoals_app", SqlServer.NewPassword()));
+
+        (await AppDataMembersAsync(database)).ShouldBe(["financegoals_app"]);
+    }
+
+    [TestMethod]
+    public async Task Every_constraint_is_named()
+    {
+        // SQL Server gives an unnamed constraint a random name, so an upgraded database and a
+        // fresh build would differ, and later scripts could not refer to it by name.
+        var database = await SqlServer.CreateDatabaseAsync();
+        new DatabaseMigrator(database, TextWriter.Null).Run(appUser: null);
+
+        (await SqlServer.QueryAsync(database, """
+            SELECT OBJECT_SCHEMA_NAME(c.parent_object_id) + '.' + OBJECT_NAME(c.parent_object_id), c.type_desc
+            FROM (
+                SELECT parent_object_id, type_desc, is_system_named FROM sys.check_constraints
+                UNION ALL SELECT parent_object_id, type_desc, is_system_named FROM sys.default_constraints
+                UNION ALL SELECT parent_object_id, type_desc, is_system_named FROM sys.key_constraints
+                UNION ALL SELECT parent_object_id, type_desc, is_system_named FROM sys.foreign_keys
+            ) AS c
+            WHERE c.is_system_named = 1
+            """)).ShouldBeEmpty();
     }
 
     [TestMethod]
@@ -165,4 +223,11 @@ public sealed class DatabaseMigratorTests
         (await SqlServer.QueryAsync(database, "SELECT ScriptName FROM dbo.SchemaVersions"))
             .ShouldBe(["migrations/0001_creates_first.sql"]);
     }
+
+    private static Task<List<string>> AppDataMembersAsync(string database) =>
+        SqlServer.QueryAsync(database, """
+            SELECT USER_NAME(member_principal_id) FROM sys.database_role_members
+            WHERE role_principal_id = DATABASE_PRINCIPAL_ID(N'app_data')
+            ORDER BY 1
+            """);
 }

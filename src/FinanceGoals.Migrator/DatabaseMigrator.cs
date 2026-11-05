@@ -16,12 +16,39 @@ namespace FinanceGoals.Migrator;
 /// </summary>
 internal sealed class DatabaseMigrator
 {
-    // Creates the user if missing; for a password user, sets the configured password every run
-    // so rotating it in configuration takes effect. Adding an existing member is a no-op.
+    // Refuses any principal that is, or could be, more than a data user, so a configuration
+    // mistake (e.g. naming the schema owner) fails instead of granting or resetting it:
+    //   50001  dbo, guest, a system user, or the connecting user itself;
+    //   50002  not a single user: a role, an Entra group (every member would get access),
+    //          a certificate or key user;
+    //   50003  already has other roles or permissions, or owns a schema, object or role.
+    // Then creates the user if missing; for a password user, sets the configured password every
+    // run so rotating it in configuration takes effect. Adding an existing member is a no-op.
+    // One transaction: if the created user turns out to be a group, nothing is kept.
     private const string _ensureAppUserSql = """
-        DECLARE @sql nvarchar(max);
+        SET XACT_ABORT ON;
+        BEGIN TRANSACTION;
 
-        IF DATABASE_PRINCIPAL_ID(@name) IS NULL
+        DECLARE @sql nvarchar(max);
+        DECLARE @id int = DATABASE_PRINCIPAL_ID(@name);
+
+        IF @name IN (N'dbo', N'guest', N'sys', N'INFORMATION_SCHEMA', N'public') OR @name = USER_NAME()
+            THROW 50001, N'The app user must be a dedicated user, not dbo, guest, a system user or the schema owner.', 1;
+
+        IF @id IS NOT NULL AND (SELECT type FROM sys.database_principals WHERE principal_id = @id) NOT IN ('S', 'E')
+            THROW 50002, N'The app user name belongs to a role, a group or another kind of principal, not a single user.', 1;
+
+        IF EXISTS (SELECT 1 FROM sys.database_role_members AS rm
+                   JOIN sys.database_principals AS r ON r.principal_id = rm.role_principal_id
+                   WHERE rm.member_principal_id = @id AND r.name <> N'app_data')
+           OR EXISTS (SELECT 1 FROM sys.database_permissions
+                      WHERE grantee_principal_id = @id AND NOT (class = 0 AND permission_name = N'CONNECT'))
+           OR EXISTS (SELECT 1 FROM sys.schemas WHERE principal_id = @id)
+           OR EXISTS (SELECT 1 FROM sys.objects WHERE principal_id = @id)
+           OR EXISTS (SELECT 1 FROM sys.database_principals WHERE owning_principal_id = @id)
+            THROW 50003, N'The app user already has other roles, permissions or ownerships; it may only be a member of app_data.', 1;
+
+        IF @id IS NULL
             SET @sql = N'CREATE USER ' + QUOTENAME(@name) +
                 CASE WHEN @password IS NULL THEN N' FROM EXTERNAL PROVIDER'
                      ELSE N' WITH PASSWORD = ' + QUOTENAME(@password, N'''') END;
@@ -31,8 +58,14 @@ internal sealed class DatabaseMigrator
         IF @sql IS NOT NULL
             EXEC (@sql);
 
+        -- An Entra name that resolves to a group creates a type X user; refuse it.
+        IF (SELECT type FROM sys.database_principals WHERE name = @name) NOT IN ('S', 'E')
+            THROW 50002, N'The app user name belongs to a role, a group or another kind of principal, not a single user.', 1;
+
         SET @sql = N'ALTER ROLE app_data ADD MEMBER ' + QUOTENAME(@name);
         EXEC (@sql);
+
+        COMMIT;
         """;
 
     private readonly string _connectionString;
@@ -93,7 +126,7 @@ internal sealed class DatabaseMigrator
         return result.Scripts.Select(script => script.Name).ToList();
     }
 
-    private void EnsureAppUser(AppUser appUser)
+    internal void EnsureAppUser(AppUser appUser)
     {
         _log.WriteLine($"== app user {appUser.Name}");
         using var connection = new SqlConnection(_connectionString);
