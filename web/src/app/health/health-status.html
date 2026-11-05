@@ -1,0 +1,20 @@
+<section aria-labelledby="health-heading">
+  <h2 id="health-heading">API health</h2>
+
+  <div role="status" aria-live="polite">
+    @if (result(); as health) {
+      <dl>
+        <dt>API</dt>
+        <dd [attr.data-state]="health.api" data-testid="api">{{ label(health.api) }}</dd>
+        <dt>Database</dt>
+        <dd [attr.data-state]="health.database" data-testid="database">
+          {{ label(health.database) }}
+        </dd>
+      </dl>
+    } @else {
+      <p>Checking…</p>
+    }
+  </div>
+
+  <button type="button" (click)="refresh()" [disabled]="checking()">Check again</button>
+</section>

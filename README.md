@@ -29,6 +29,7 @@ dotnet test          # also writes coverage to TestResults/<project>.cobertura.x
 | `db/migrations` | Schema changes, run once each in order (`0001_name.sql`), journaled in `dbo.SchemaVersions`. Never edit one once merged |
 | `db/repeatable` | Permissions, views and procedures, run on every deployment (`R001_name.sql`); must be idempotent |
 | `db/seed` | Reference data, run once each (`S0001_name.sql`), journaled in `dbo.SeedVersions` |
+| `web` | Angular app; see Web below |
 | `tests/*` | Test projects: MSTest on Microsoft.Testing.Platform, NSubstitute for mocks, Shouldly for assertions |
 | `tests/FinanceGoals.Architecture.Tests` | Layer dependency rules (NetArchTest and project references) and the no-primary-constructors check |
 
@@ -51,6 +52,22 @@ ConnectionStrings__App="Server=...;User ID=financegoals_app;..." dotnet run --pr
 The build writes the OpenAPI document to `src/FinanceGoals.Api/openapi/FinanceGoals.Api.json`. It is committed, so API changes show in the pull request diff.
 
 Logs are JSON lines on standard output (Serilog), with levels set in the `Serilog` configuration section. Successful health probes are left out of the request log; failed ones are logged as errors.
+
+## Web
+
+Requires Node.js 24.15 or later (`web/.nvmrc`; CI uses the latest 24).
+
+```sh
+cd web
+npm ci
+npm start            # http://localhost:4200, proxies /health to the API on http://localhost:5208
+npm run lint
+npm run format:check
+npm test             # Vitest
+npm run build
+```
+
+The home page shows whether the API answers (`/health/live`) and whether it can reach its database (`/health/ready`). Run the API with `ConnectionStrings__App` set to see the database as OK.
 
 ## Database
 

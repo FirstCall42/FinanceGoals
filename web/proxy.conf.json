@@ -1,0 +1,6 @@
+{
+  "/health": {
+    "target": "http://localhost:5208",
+    "secure": false
+  }
+}
