@@ -68,7 +68,40 @@ milestone "Phase 3: Debt payoff"                     "Loan types, schedules, rat
 milestone "Phase 4: Savings goals"                   "Targets, progress, required monthly amount, projections"
 milestone "Phase 5: Insights"                        "Dashboard, currency effects vs real growth, goal timeline"
 
+echo "== Environment for the PR gates"
+# Only workflows running from main may use it, so its secrets never reach PR-controlled code.
+gh api -X PUT "repos/$REPO/environments/pr-gates" --input - >/dev/null <<'JSON'
+{ "deployment_branch_policy": { "protected_branches": false, "custom_branch_policies": true } }
+JSON
+if ! gh api "repos/$REPO/environments/pr-gates/deployment-branch-policies" \
+       --jq '.branch_policies[].name' | grep -qx main; then
+  gh api "repos/$REPO/environments/pr-gates/deployment-branch-policies" -f name=main -f type=branch >/dev/null
+fi
+echo "environment pr-gates: deployable from main only"
+
+# The "AI review" and "Human approval" statuses are required only once everything that posts
+# them exists. Requiring them earlier would block every PR, including the one that fixes it.
+app_id=$(gh variable get GATES_APP_ID --repo "$REPO" 2>/dev/null || true)
+env_secrets=$(gh secret list --repo "$REPO" --env pr-gates --json name --jq '.[].name' 2>/dev/null || true)
+gates_on_main=""
+if gh api "repos/$REPO/contents/.github/workflows/pr-gates.yml" >/dev/null 2>&1; then gates_on_main=yes; fi
+missing=()
+[ -n "$app_id" ] || missing+=("repo variable GATES_APP_ID")
+grep -qx GATES_APP_PRIVATE_KEY <<<"$env_secrets" || missing+=("pr-gates secret GATES_APP_PRIVATE_KEY")
+grep -qx CLAUDE_CODE_OAUTH_TOKEN <<<"$env_secrets" || missing+=("pr-gates secret CLAUDE_CODE_OAUTH_TOKEN")
+[ -n "$gates_on_main" ] || missing+=("pr-gates.yml merged to main")
+
 echo "== Ruleset for main"
+ruleset=$(mktemp)
+if [ ${#missing[@]} -eq 0 ]; then
+  sed "s/\"__GATES_APP_ID__\"/$app_id/g" "$HERE/ruleset-main.json" > "$ruleset"
+  echo "PR gates required, accepted only from app $app_id"
+else
+  sed '/__GATES_APP_ID__/d; s/{ "context": "Type label" },/{ "context": "Type label" }/' \
+    "$HERE/ruleset-main.json" > "$ruleset"
+  echo "WARNING: PR gates NOT required yet. Missing:"
+  printf '           - %s\n' "${missing[@]}"
+fi
 existing=""
 if listed=$(gh api "repos/$REPO/rulesets" --jq '.[] | select(.name == "main") | .id' 2>/dev/null); then
   existing="$listed"
@@ -78,7 +111,7 @@ if [ -n "$existing" ]; then
 else
   method=POST; path="repos/$REPO/rulesets"
 fi
-if gh api -X "$method" "$path" --input "$HERE/ruleset-main.json" >/dev/null 2>"$HERE/.ruleset-error.log"; then
+if gh api -X "$method" "$path" --input "$ruleset" >/dev/null 2>"$HERE/.ruleset-error.log"; then
   echo "ruleset 'main' applied ($method)"
   rm -f "$HERE/.ruleset-error.log"
 else
@@ -104,3 +137,12 @@ echo "  1. Project > Settings > Status field: Backlog, Ready, In progress, In re
 echo "  2. Project > Workflows: enable 'Auto-add to project' (this repo), 'Item closed' -> Done,"
 echo "     'Pull request merged' -> Done, 'Pull request linked to issue' -> In review"
 echo "  3. Project > New view > Roadmap, grouped by Milestone"
+echo
+echo "PR gates (one time, in this order; then run this script again):"
+echo "  1. Create a GitHub App: Settings > Developer settings > GitHub Apps > New. No webhook."
+echo "     Repository permissions: Commit statuses: Read and write. Install it on this repo only."
+echo "     gh variable set GATES_APP_ID --repo $REPO --body <App ID>"
+echo "     gh secret set GATES_APP_PRIVATE_KEY --repo $REPO --env pr-gates < <downloaded .pem>"
+echo "  2. Install the Claude GitHub App on this repo: https://github.com/apps/claude"
+echo "  3. claude setup-token, then: gh secret set CLAUDE_CODE_OAUTH_TOKEN --repo $REPO --env pr-gates"
+echo "  4. Merge the PR that adds .github/workflows/pr-gates.yml."
