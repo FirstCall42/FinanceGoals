@@ -1,4 +1,16 @@
-// Deliberately plain: the shared look comes with the UI foundations (#78).
+section {
+  background: var(--fg-surface);
+  border: 1px solid var(--fg-line);
+  border-radius: var(--fg-radius);
+  padding: 20px;
+}
+
+h2 {
+  margin: 0 0 12px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
 dl {
   display: grid;
   grid-template-columns: max-content auto;
@@ -12,12 +24,19 @@ dt {
 dd {
   margin: 0;
 
-  &[data-state='up'] {
-    color: #1a7f37;
-  }
-
   &[data-state='down'],
   &[data-state='unreachable'] {
-    color: #cf222e;
+    color: var(--fg-negative);
   }
+}
+
+button {
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 10px;
+  border: 1px solid var(--fg-line);
+  background: var(--fg-surface);
+  color: var(--fg-ink);
+  font: inherit;
+  cursor: pointer;
 }
