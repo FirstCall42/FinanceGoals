@@ -13,25 +13,28 @@
     </svg>
     <span>FinanceGoals</span>
   </a>
-  <button
-    type="button"
-    class="icon-button"
-    (click)="theme.toggle()"
-    [attr.aria-label]="theme.current() === 'dark' ? 'Use the light theme' : 'Use the dark theme'"
-  >
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="2"
-      stroke-linecap="round"
-      aria-hidden="true"
+  <div class="actions">
+    <app-currency-switcher />
+    <button
+      type="button"
+      class="icon-button"
+      (click)="theme.toggle()"
+      [attr.aria-label]="theme.current() === 'dark' ? 'Use the light theme' : 'Use the dark theme'"
     >
-      <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"></path>
-    </svg>
-  </button>
+      <svg
+        width="18"
+        height="18"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        aria-hidden="true"
+      >
+        <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"></path>
+      </svg>
+    </button>
+  </div>
 </header>
 <div class="layout">
   <nav class="sidenav" aria-label="Main">
@@ -42,6 +45,7 @@
       ariaCurrentWhenActive="page"
       >Overview</a
     >
+    <a routerLink="/settings" routerLinkActive="active" ariaCurrentWhenActive="page">Settings</a>
   </nav>
   <main class="content">
     <router-outlet />

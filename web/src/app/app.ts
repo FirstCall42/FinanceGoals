@@ -1,9 +1,10 @@
 import { Component, inject } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { CurrencySwitcher } from './currency/currency-switcher';
 import { ThemeService } from './theme/theme.service';
 
 @Component({
-  imports: [RouterOutlet, RouterLink, RouterLinkActive],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, CurrencySwitcher],
   selector: 'app-root',
   styleUrl: './app.scss',
   templateUrl: './app.html',
