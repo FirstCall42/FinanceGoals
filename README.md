@@ -95,6 +95,25 @@ On Azure SQL, creating an `entra` app user requires the migrator to sign in as a
 
 CI checks every PR's database scripts (the "Database checks" job): merged migration and seed scripts must be unchanged, both on disk and as embedded in the migrator, and a database built by `main`'s migrator and then upgraded by the PR's must match a fresh build. There are no releases yet, so `main` stands in for the last release. To run these checks locally, build `main`'s migrator and point `FINANCEGOALS_BASE_MIGRATOR` at its `FinanceGoals.Migrator.dll`; without it the test reports inconclusive.
 
+## Images
+
+Three container images, each built from the repository root:
+
+| Image | Dockerfile | Base |
+| --- | --- | --- |
+| `financegoals-api` | `src/FinanceGoals.Api/Dockerfile` | `aspnet:10.0-noble-chiseled-extra`, port 8080 |
+| `financegoals-migrator` | `src/FinanceGoals.Migrator/Dockerfile` | `runtime:10.0-noble-chiseled-extra`, runs once and exits |
+| `financegoals-web` | `web/Dockerfile` | `nginx-unprivileged`, port 8080, serves the Angular build |
+
+The chiseled images have no shell or package manager and run as a non-root user.
+
+```sh
+docker build -f src/FinanceGoals.Api/Dockerfile -t financegoals-api .
+docker run --rm -p 8080:8080 financegoals-api        # http://localhost:8080/health/live
+```
+
+The **Images** workflow builds all three on every pull request (the "Images" check) without pushing. On every push to `main` it builds them **once** and pushes `ghcr.io/firstcall42/financegoals-<image>:<commit SHA>`; a tag that already exists is never rebuilt. Deploys use these exact images for test and then promote the same tags to production. The web image's files are what Static Web Apps serves; settings that differ per environment (such as the API URL) are added at deploy time, not baked into the build.
+
 ## Cloud
 
 GitHub Actions signs in to Azure with OpenID Connect, so no Azure password, secret or certificate is stored in GitHub. Each environment has its own identity:
