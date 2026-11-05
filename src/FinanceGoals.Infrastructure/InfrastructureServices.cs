@@ -1,3 +1,5 @@
+using FinanceGoals.Application.Currencies;
+using FinanceGoals.Infrastructure.Currencies;
 using FinanceGoals.Infrastructure.Health;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -10,6 +12,10 @@ public static class InfrastructureServices
 
     /// <summary>Health checks with this tag decide readiness. Liveness runs no checks at all.</summary>
     public const string ReadyTag = "ready";
+
+    /// <summary>Adds the implementations of the Application interfaces.</summary>
+    public static IServiceCollection AddInfrastructure(this IServiceCollection services) =>
+        services.AddSingleton<ICurrencyCatalog, SqlCurrencyCatalog>();
 
     /// <summary>Adds the database readiness check. It gives up after five seconds.</summary>
     public static IHealthChecksBuilder AddDatabaseHealthCheck(this IHealthChecksBuilder builder) =>

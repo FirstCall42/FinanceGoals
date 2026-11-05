@@ -89,6 +89,7 @@ module containerApps 'modules/container-apps.bicep' = {
     migratorIdentityId: identities.outputs.migratorId
     migratorClientId: identities.outputs.migratorClientId
     sqlServerFqdn: sql.outputs.serverFqdn
+    webOrigin: web.outputs.url
     databaseName: sql.outputs.databaseName
     tags: tags
   }
@@ -105,6 +106,8 @@ module web 'modules/static-web-app.bicep' = {
 
 output apiUrl string = containerApps.outputs.apiUrl
 output webUrl string = web.outputs.url
+output staticWebAppName string = web.outputs.name
+output apiName string = containerApps.outputs.apiName
 output sqlServerFqdn string = sql.outputs.serverFqdn
 output databaseName string = sql.outputs.databaseName
 output migratorJobName string = containerApps.outputs.migratorJobName

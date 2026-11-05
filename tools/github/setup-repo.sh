@@ -68,6 +68,15 @@ milestone "Phase 3: Debt payoff"                     "Loan types, schedules, rat
 milestone "Phase 4: Savings goals"                   "Targets, progress, required monthly amount, projections"
 milestone "Phase 5: Insights"                        "Dashboard, currency effects vs real growth, goal timeline"
 
+echo "== Security scanning"
+# Dependabot alerts report vulnerable dependencies; Dependabot does not open PRs (its PRs could not
+# pass the PR gates). Dependencies are updated in normal PRs. CodeQL default setup scans C#,
+# TypeScript and the workflows on every PR and push. Both are free for public repositories.
+gh api -X PUT "repos/$REPO/vulnerability-alerts" >/dev/null
+gh api -X DELETE "repos/$REPO/automated-security-fixes" >/dev/null 2>&1 || true
+gh api -X PATCH "repos/$REPO/code-scanning/default-setup" -f state=configured -f query_suite=default >/dev/null
+echo "Dependabot alerts on (no bot PRs); CodeQL default setup on"
+
 echo "== Environment for the PR gates"
 # Only workflows running from main may use it, so its secrets never reach PR-controlled code.
 gh api -X PUT "repos/$REPO/environments/pr-gates" --input - >/dev/null <<'JSON'

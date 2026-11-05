@@ -73,6 +73,8 @@ npm run build
 Test and production run on Azure free tiers, and the monthly cost must stay at $0. Flag anything that could incur a charge.
 
 - Images are built once per commit on main and tagged with the commit SHA (`ghcr.io/firstcall42/financegoals-<api|migrator|web>:<sha>`). Deploy and promote by SHA; never rebuild per environment, never use `latest`, and never bake environment settings into an image.
+- Deploys happen only through the Release workflow (push to main, or a manual run on main). Never deploy by hand except to recover; if you must, say so in the PR or issue.
+- Never bake environment settings into the web build: the deploy writes `config.json` (the API URL). The API allows cross-origin requests only from `Cors:AllowedOrigins`.
 - Every Azure resource is defined in `infra/`; never configure anything in the portal. CI compiles and lints the templates (the "Infra" check).
 - No Key Vault and no stored secrets: workloads sign in to Azure SQL and other services with their managed identities.
 - The test environment (`swedencentral`) is the live one until production exists (#86). Don't deploy to production before then.
@@ -94,6 +96,7 @@ Test and production run on Azure free tiers, and the monthly cost must stay at $
 - One issue per branch: `<type>/<issue number>-<short-name>`, e.g. `chore/5-solution-structure`. Branch from an up-to-date `main`.
 - PR titles follow Conventional Commits with a scope, e.g. `feat(debt): annuity schedule`.
 - Each PR description contains `Closes #<n>` and fills in the PR template. Each PR gets exactly one type label: `feature`, `bug` or `chore`. The `PR rules` workflow checks all three.
+- Dependencies: Dependabot alerts and CodeQL scanning are on (`tools/github/setup-repo.sh`), but Dependabot opens no PRs. Fix alerts promptly, and update dependencies in normal PRs.
 - PRs are squash-merged and their branches are deleted, so check whether a PR is already merged before pushing more commits to its branch.
 - If review feedback states a general rule, add it to this file.
 
