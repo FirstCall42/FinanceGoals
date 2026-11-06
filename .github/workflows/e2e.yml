@@ -1,0 +1,77 @@
+name: E2E
+
+# End-to-end tests (#14): Playwright drives a real browser against the Docker Compose stack (SQL
+# Server, migrator, API and the web build), the same stack as `docker compose up` locally (#13).
+# Not a required check yet; it can become one once it has proven stable.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  # One group per PR (superseded runs are cancelled) and one per commit on main (never cancelled).
+  group: e2e-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: End-to-end tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: web/.nvmrc
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Start the stack
+        # Builds the three images and waits until the API is ready (the migrator has run).
+        run: |
+          docker compose up --build -d
+          for _ in $(seq 1 60); do
+            curl -fsS http://localhost:5208/health/ready | grep -qx Healthy && curl -fsS -o /dev/null http://localhost:4200/ && exit 0
+            sleep 5
+          done
+          echo "::error::The stack did not become ready"
+          docker compose ps -a
+          exit 1
+
+      - name: Install
+        working-directory: web
+        run: npm ci
+
+      - name: Install the browser
+        working-directory: web
+        run: npx playwright install --with-deps chromium
+
+      - name: Run the tests
+        working-directory: web
+        run: npm run e2e
+
+      - name: Upload the report
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: |
+            web/playwright-report/
+            web/test-results/
+          retention-days: 7
+
+      - name: Show the stack's logs
+        if: failure()
+        run: docker compose logs --no-color --tail 200
+
+      - name: Stop the stack
+        if: always()
+        run: docker compose down -v

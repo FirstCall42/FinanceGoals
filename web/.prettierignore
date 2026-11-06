@@ -2,3 +2,5 @@ package-lock.json
 .angular/
 dist/
 src/app/api/
+test-results/
+playwright-report/
