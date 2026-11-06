@@ -1,3 +1,4 @@
+import { DateField } from '../date/date-field';
 import { Component, computed, effect, inject, signal } from '@angular/core';
 import { AuthService } from '../auth/auth.service';
 import { CurrencyService } from '../currency/currency.service';
@@ -19,7 +20,7 @@ interface DayGroup {
  */
 @Component({
   selector: 'app-balances',
-  imports: [MoneyPipe],
+  imports: [DateField, MoneyPipe],
   template: `
     <section class="panel" aria-labelledby="balances-title">
       <h1 id="balances-title">Balances</h1>
@@ -34,10 +35,15 @@ interface DayGroup {
             Enter each account's balance on the date, in the account's own currency. Leave an
             account blank to skip it.
           </p>
-          <label class="field date">
-            <span>Date</span>
-            <input type="date" [value]="date()" [max]="today" (input)="date.set(text($event))" />
-          </label>
+          <div class="field date">
+            <span aria-hidden="true">Date</span
+            ><app-date-field
+              [value]="date()"
+              [max]="today"
+              (valueChange)="date.set($event)"
+              label="Date"
+            />
+          </div>
           <div class="accounts">
             @for (a of accounts(); track a.id) {
               <label class="field">

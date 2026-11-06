@@ -1,3 +1,4 @@
+import { DateField } from '../date/date-field';
 import { Component, computed, effect, inject, signal } from '@angular/core';
 import { accountTypes } from '../accounts/account.service';
 import { AuthService } from '../auth/auth.service';
@@ -17,17 +18,22 @@ import { NetWorth, NetWorthPoint, NetWorthService } from './net-worth.service';
  */
 @Component({
   selector: 'app-net-worth',
-  imports: [MoneyPipe, MissingRate, NetWorthChart],
+  imports: [DateField, MoneyPipe, MissingRate, NetWorthChart],
   template: `
     <section class="panel" aria-labelledby="nw-title">
       <h1 id="nw-title">Net worth</h1>
       @if (!profile()) {
         <p>Sign in to see your net worth.</p>
       } @else {
-        <label class="field date">
-          <span>As of</span>
-          <input type="date" [value]="date()" [max]="today" (input)="date.set(text($event))" />
-        </label>
+        <div class="field date">
+          <span aria-hidden="true">As of</span
+          ><app-date-field
+            [value]="date()"
+            [max]="today"
+            (valueChange)="date.set($event)"
+            label="As of"
+          />
+        </div>
 
         @if (error(); as message) {
           <p class="error" role="alert">{{ message }}</p>

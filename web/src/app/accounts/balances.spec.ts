@@ -76,8 +76,8 @@ describe('Balances page', () => {
   it('records the filled-in accounts, skips blank ones and reads Norwegian numbers', async () => {
     const fixture = await open([]);
     const page = fixture.nativeElement as HTMLElement;
-    const date = page.querySelector('input[type=date]') as HTMLInputElement;
-    date.value = '2026-01-31';
+    const date = page.querySelector('input[type=text]') as HTMLInputElement;
+    date.value = '31.01.2026';
     date.dispatchEvent(new Event('input'));
     await fixture.whenStable();
     const [savings, usd] = inputs(fixture);

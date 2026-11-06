@@ -30,18 +30,22 @@
             }
           </select>
         </label>
-        <label class="field">
-          <span>Paid out</span>
-          <input type="date" [value]="input().paidOut" (input)="set('paidOut', text($event))" />
-        </label>
-        <label class="field">
-          <span>First payment</span>
-          <input
-            type="date"
-            [value]="input().firstPayment"
-            (input)="set('firstPayment', text($event))"
+        <div class="field">
+          <span aria-hidden="true">Paid out</span
+          ><app-date-field
+            [value]="input().paidOut"
+            (valueChange)="set('paidOut', $event)"
+            label="Paid out"
           />
-        </label>
+        </div>
+        <div class="field">
+          <span aria-hidden="true">First payment</span
+          ><app-date-field
+            [value]="input().firstPayment"
+            (valueChange)="set('firstPayment', $event)"
+            label="First payment"
+          />
+        </div>
         <label class="field">
           <span>Term (years)</span>
           <input
@@ -71,14 +75,14 @@
       </div>
       @for (change of input().rateChanges; track $index; let i = $index) {
         <div class="row">
-          <label class="field">
-            <span>Changed from</span>
-            <input
-              type="date"
+          <div class="field">
+            <span aria-hidden="true">Changed from</span
+            ><app-date-field
               [value]="change.from"
-              (input)="updateRateChange(i, 'from', text($event))"
+              (valueChange)="updateRateChange(i, 'from', $event)"
+              label="Changed from"
             />
-          </label>
+          </div>
           <label class="field">
             <span>New rate (%)</span>
             <input
@@ -112,33 +116,33 @@
             (input)="set('monthlyAmount', text($event))"
           />
         </label>
-        <label class="field">
-          <span>From</span>
-          <input
-            type="date"
+        <div class="field">
+          <span aria-hidden="true">From</span
+          ><app-date-field
             [value]="input().monthlyFrom"
-            (input)="set('monthlyFrom', text($event))"
+            (valueChange)="set('monthlyFrom', $event)"
+            label="From"
           />
-        </label>
-        <label class="field">
-          <span>Until (optional)</span>
-          <input
-            type="date"
+        </div>
+        <div class="field">
+          <span aria-hidden="true">Until (optional)</span
+          ><app-date-field
             [value]="input().monthlyUntil"
-            (input)="set('monthlyUntil', text($event))"
+            (valueChange)="set('monthlyUntil', $event)"
+            label="Until (optional)"
           />
-        </label>
+        </div>
       </div>
       @for (extra of input().extras; track $index; let i = $index) {
         <div class="row">
-          <label class="field">
-            <span>One-off on</span>
-            <input
-              type="date"
+          <div class="field">
+            <span aria-hidden="true">One-off on</span
+            ><app-date-field
               [value]="extra.date"
-              (input)="updateExtra(i, 'date', text($event))"
+              (valueChange)="updateExtra(i, 'date', $event)"
+              label="One-off on"
             />
-          </label>
+          </div>
           <label class="field">
             <span>Amount</span>
             <input
