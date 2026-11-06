@@ -83,6 +83,38 @@ public sealed class LoanScheduleTests
     }
 
     [TestMethod]
+    public void Without_rate_changes_the_last_payment_is_close_to_the_regular_one()
+    {
+        // A year's interest is exactly the annual rate (leap years count 366 days), so leap days add
+        // no drift. Months of 28 to 31 days still differ from the even months PMT assumes; over 25
+        // years without a rate change that leaves a few hundred kroner for the last payment.
+        var schedule = LoanSchedule.Calculate(Annuity(1_000_000m, 0.06m, 300));
+
+        schedule.Count.ShouldBe(300);
+        schedule.SkipLast(1).ShouldAllBe(i => i.Payment.Amount == 6_443.01m);
+        Math.Abs(schedule[^1].Payment.Amount - 6_443.01m).ShouldBeLessThan(6_443.01m * 0.1m);
+    }
+
+    [TestMethod]
+    public void A_period_across_new_year_counts_each_year_by_its_own_length()
+    {
+        // 15 December 2027 to 15 January 2028: 17 days of 365 and 14 of 366 (2028 is a leap year).
+        var paidOut = new DateOnly(2027, 12, 15);
+        var loan = new Loan("Mortgage", new Money(1_000_000m, _nok), new DateOnly(2028, 1, 15), 300,
+            [new LoanPeriod(paidOut, RateType.Variable, RepaymentType.Annuity, [new RateChange(paidOut, 0.06m)])], paidOut: paidOut);
+
+        LoanSchedule.Calculate(loan)[0].Interest.ShouldBe(new Money(5_089.60m, _nok));
+    }
+
+    [TestMethod]
+    public void An_exact_half_ore_of_interest_rounds_up()
+    {
+        // 143 554,50 at 5 % for 31 days is exactly 609,615; 1 001,00 at 6 % for a 30/360 month is 5,005.
+        LoanSchedule.Calculate(Annuity(143_554.50m, 0.05m, 300))[0].Interest.ShouldBe(new Money(609.62m, _nok));
+        LoanSchedule.Calculate(Thirty360(Annuity(1_001m, 0.06m, 300)))[0].Interest.ShouldBe(new Money(5.01m, _nok));
+    }
+
+    [TestMethod]
     public void A_mid_month_payout_adds_the_extra_days_of_actual_interest_to_the_first_payment()
     {
         // 15 January to 1 March is 45 days (7 397,26); principal is the payment less the 28 days of
@@ -157,7 +189,7 @@ public sealed class LoanScheduleTests
                 return schedule.Count == l.Months
                     && schedule.Sum(i => i.Principal.Amount) == l.Principal
                     && schedule[^1].Balance.Amount == 0m
-                    && schedule.All(i => i.Balance.Amount >= 0m && i.Principal.Amount >= 0m);
+                    && schedule.All(i => i.Balance.Amount >= 0m);
             })
             .QuickCheckThrowOnFailure();
     }

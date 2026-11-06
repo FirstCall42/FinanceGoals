@@ -15,8 +15,11 @@ public enum RateType
 /// <summary>How interest days are counted.</summary>
 public enum DayCount
 {
-    /// <summary>Actual days in the period over 365, as Norwegian banks charge (the default).</summary>
-    Actual365,
+    /// <summary>
+    /// Actual days over the days in that year (365, or 366 in a leap year): the bank's count in a
+    /// normal year (checked against a statement), and a whole year is exactly the annual rate. The default.
+    /// </summary>
+    ActualActual,
 
     /// <summary>Every month is 30 days of a 360-day year: each whole month is exactly 1/12 of the rate.</summary>
     Thirty360,
@@ -125,7 +128,7 @@ public sealed class Loan
         IReadOnlyList<LoanPeriod> periods,
         Money? feePerPayment = null,
         DateOnly? paidOut = null,
-        DayCount dayCount = DayCount.Actual365)
+        DayCount dayCount = DayCount.ActualActual)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentNullException.ThrowIfNull(periods);

@@ -34,8 +34,8 @@ public sealed record PayoffComparison(PayoffSummary WithoutExtra, PayoffSummary 
 
 /// <summary>
 /// Computes a loan's payment schedule. Conventions (decided with the owner in #109):
-/// - interest is the balance times the annual rate times the days since the previous payment over 365
-///   (actual/365, as the bank charges; <see cref="DayCount.Thirty360"/> gives 1/12 a month), using the
+/// - interest is the balance times the annual rate times the days since the previous payment over the
+///   days in the year (actual/actual, as the bank charges; <see cref="DayCount.Thirty360"/> gives 1/12 a month), using the
 ///   rate in effect on the first day of each interest month (the day after the previous payment); a rate
 ///   change applies from the first interest month that starts on or after its date;
 /// - the annuity payment is fixed (PMT at rate / 12), so principal is what the payment leaves after
@@ -47,7 +47,9 @@ public sealed record PayoffComparison(PayoffSummary WithoutExtra, PayoffSummary 
 ///   the remaining term shrinks (NPER at the current rate, rounded up to whole months). Interest-only
 ///   months push that shortened end back; an extra during interest-only lowers the later annuity instead;
 /// - amounts are rounded to the currency's minor units; the last payment clears the balance, so the
-///   principal and extra payments always sum exactly to the loan.
+///   principal and extra payments always sum exactly to the loan. Months of 28 to 31 days differ from
+///   the even months PMT assumes, so without rate changes the last payment differs by a few percent;
+///   each rate change recalculates the payment and resets that residue.
 /// </summary>
 public static class LoanSchedule
 {
@@ -81,10 +83,10 @@ public static class LoanSchedule
             // A payout exactly a month before the first payment is a whole month (also at month ends).
             var wholeMonth = number > 1 || loan.Start == date.AddMonths(-1);
             var periodStart = number == 1 ? loan.Start : previous;
-            var interest = Round(balance * rate * YearFraction(loan.DayCount, periodStart, date, wholeMonth), currency);
+            var interest = Round(Interest(balance, rate, loan.DayCount, periodStart, date, wholeMonth), currency);
             var monthInterest = wholeMonth
                 ? interest
-                : Round(balance * rate * YearFraction(loan.DayCount, date.AddMonths(-1), date, wholeMonth: true), currency);
+                : Round(Interest(balance, rate, loan.DayCount, date.AddMonths(-1), date, wholeMonth: true), currency);
 
             decimal principal;
             switch (period.RepaymentType)
@@ -98,7 +100,9 @@ public static class LoanSchedule
 
                     // Principal is repaid as if the month were whole; the extra (or missing) interest days
                     // of a prorated first period are added to (or taken off) the payment, not the loan.
-                    principal = Math.Max(annuityPayment - monthInterest, 0);
+                    // The payment stays fixed: at very high rates a 31-day month's interest can exceed it,
+                    // and then the shortfall (negative principal) is added to the balance.
+                    principal = annuityPayment - monthInterest;
                     break;
                 case RepaymentType.InterestOnly:
                     principal = 0;
@@ -218,16 +222,34 @@ public static class LoanSchedule
     }
 
     /// <summary>
-    /// The part of a year that interest runs for between two dates. On 30/360 a whole schedule month
-    /// is exactly 1/12, also when it starts on the 31st or ends in February.
+    /// Interest on a balance between two dates, unrounded. It multiplies before it divides, so an
+    /// exact half minor unit stays exact and rounds away from zero.
     /// </summary>
-    internal static decimal YearFraction(DayCount dayCount, DateOnly from, DateOnly to, bool wholeMonth) => dayCount switch
+    internal static decimal Interest(decimal balance, decimal annualRate, DayCount dayCount, DateOnly from, DateOnly to, bool wholeMonth)
     {
-        // Leap years too: the year is 365 days, so a 29 February adds a day's interest.
-        DayCount.Actual365 => (to.DayNumber - from.DayNumber) / 365m,
-        DayCount.Thirty360 => wholeMonth ? 1m / 12m : Days30360(from, to) / 360m,
-        _ => throw new ArgumentOutOfRangeException(nameof(dayCount), dayCount, "Unknown day count."),
-    };
+        switch (dayCount)
+        {
+            case DayCount.ActualActual:
+                // Days in each calendar year over that year's length (365 or 366), so a year's
+                // interest is exactly the annual rate and a leap day adds no drift.
+                var interest = 0m;
+                for (var start = from; start < to;)
+                {
+                    var yearEnd = new DateOnly(start.Year + 1, 1, 1);
+                    var end = to < yearEnd ? to : yearEnd;
+                    var daysInYear = DateTime.IsLeapYear(start.Year) ? 366 : 365;
+                    interest += balance * annualRate * (end.DayNumber - start.DayNumber) / daysInYear;
+                    start = end;
+                }
+
+                return interest;
+            case DayCount.Thirty360:
+                // A whole schedule month is exactly 1/12, also from the 31st or to the end of February.
+                return wholeMonth ? balance * annualRate / 12m : balance * annualRate * Days30360(from, to) / 360m;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(dayCount), dayCount, "Unknown day count.");
+        }
+    }
 
     /// <summary>Days between two dates on a 30/360 basis (every month counts as 30 days).</summary>
     internal static int Days30360(DateOnly from, DateOnly to)
