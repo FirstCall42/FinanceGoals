@@ -137,6 +137,8 @@ public sealed class AccountTests
         (await SendAsync(HttpMethod.Post, path, "acc-owner-5", new { name = " ", type = "Savings", currencyCode = "NOK" })).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         (await SendAsync(HttpMethod.Post, path, "acc-owner-5", new { name = "A", currencyCode = "NOK" })).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         (await SendAsync(HttpMethod.Post, path, "acc-owner-5", new { name = "B", type = "Crypto", currencyCode = "NOK" })).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await SendAsync(HttpMethod.Post, path, "acc-owner-5", new { name = "B2", type = 99, currencyCode = "NOK" })).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await SendAsync(HttpMethod.Patch, $"{path}/{account.Id}", "acc-owner-5", new { type = 99 })).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         (await SendAsync(HttpMethod.Post, path, "acc-owner-5", new { name = "C", type = "Savings", currencyCode = "XXQ" })).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         (await SendAsync(HttpMethod.Patch, $"{path}/{account.Id}", "acc-owner-5", new { })).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         (await SendAsync(HttpMethod.Patch, $"{path}/{account.Id}", "acc-owner-5", new { currencyCode = "nok" })).StatusCode.ShouldBe(HttpStatusCode.BadRequest);

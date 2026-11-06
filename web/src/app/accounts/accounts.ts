@@ -25,7 +25,8 @@ interface Draft {
       } @else {
         <p class="hint">
           Bank, savings, investment, pension and property accounts, each in one currency. Balances
-          are added as snapshots later.
+          are added as snapshots later. Archiving hides an account but keeps it, and its name stays
+          taken.
         </p>
 
         <form class="add" (submit)="add($event)">

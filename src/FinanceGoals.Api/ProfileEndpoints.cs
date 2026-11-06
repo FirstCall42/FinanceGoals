@@ -143,7 +143,7 @@ internal static class ProfileEndpoints
                     errors["name"] = ["The name must be 1 to 100 characters."];
                 }
 
-                if (request.Type is null)
+                if (request.Type is not { } type || !Enum.IsDefined(type))
                 {
                     errors["type"] = ["Pick the type of account."];
                 }
@@ -178,6 +178,11 @@ internal static class ProfileEndpoints
                     {
                         errors["name"] = ["The name must be 1 to 100 characters."];
                     }
+                }
+
+                if (request.Type is { } newType && !Enum.IsDefined(newType))
+                {
+                    errors["type"] = ["Pick the type of account."];
                 }
 
                 if (request.CurrencyCode is not null && !(await currencies.ListAsync(cancellationToken)).Any(c => c.Code == request.CurrencyCode))

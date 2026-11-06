@@ -20,9 +20,11 @@ export const appConfig: ApplicationConfig = {
     // Read config.json (the API base URL) before the app starts, and point the generated API
     // client (src/app/api) at it.
     provideAppInitializer(async () => {
+      // inject() only works before the first await.
       const config = inject(AppConfig);
+      const api = inject(ApiConfiguration);
       await config.load();
-      inject(ApiConfiguration).rootUrl = config.apiBaseUrl;
+      api.rootUrl = config.apiBaseUrl;
     }),
   ],
 };
