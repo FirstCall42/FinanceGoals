@@ -57,7 +57,7 @@ describe('Date field', () => {
 
   it('shows every displayed date with zero-padded day and month', () => {
     expect(formatDate('2026-03-05')).toBe('05.03.2026');
-    expect(formatDate('2026-11-07T22:30:00Z')).toBe('07.11.2026');
+    expect(formatDate('2026-11-07T12:00:00Z')).toBe('07.11.2026');
   });
 
   it('keeps text that is not a date, marked invalid, when leaving the field', () => {
@@ -82,11 +82,13 @@ describe('Date field', () => {
   });
 
   it('refuses a date after the latest allowed', () => {
-    const { host, type } = setup();
+    const { host, type, text } = setup();
 
     type('01.01.2027');
 
     expect(host.date()).toBe('');
+    expect(text.value).toBe('01.01.2027');
+    expect(text.getAttribute('aria-invalid')).toBe('true');
   });
 
   it('follows the form when the date is set from outside', () => {

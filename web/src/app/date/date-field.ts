@@ -103,7 +103,9 @@ export class DateField {
   // What was typed stays while it is a date or not yet one; a date set from outside replaces it.
   protected readonly shown = computed(() => {
     const typed = this.typing();
-    return typed !== undefined && parse(typed) === this.value() ? typed : display(this.value());
+    return typed !== undefined && (this.value() === '' || parse(typed) === this.value())
+      ? typed
+      : display(this.value());
   });
   protected readonly invalid = computed(() => this.value() === '' && (this.typing() ?? '') !== '');
   private readonly native = viewChild.required<ElementRef<HTMLInputElement>>('native');
@@ -145,9 +147,15 @@ export function display(iso: string): string {
   return match ? `${match[3]}.${match[2]}.${match[1]}` : iso;
 }
 
-/** A date for display: dd.MM.yyyy. Takes an ISO date, or a timestamp (its UTC date). */
+/** A date for display: dd.MM.yyyy. Takes an ISO date, or a timestamp (its date where the browser is). */
 export function formatDate(value: string): string {
-  return display(value.length > 10 ? new Date(value).toISOString().slice(0, 10) : value);
+  if (value.length <= 10) {
+    return display(value);
+  }
+
+  const when = new Date(value);
+  const two = (n: number) => String(n).padStart(2, '0');
+  return `${two(when.getDate())}.${two(when.getMonth() + 1)}.${when.getFullYear()}`;
 }
 
 /** dd.MM.yyyy (also with / or -, and one-digit days and months) as yyyy-MM-dd, or empty if it is not a real date. */
