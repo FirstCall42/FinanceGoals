@@ -213,6 +213,25 @@ public sealed class DatabaseMigratorTests
     }
 
     [TestMethod]
+    public async Task Every_data_table_belongs_to_a_profile_and_records_who_changed_it()
+    {
+        // A profile owns all data (#25, #27): every data table has ProfileId and the audit columns.
+        // Shared reference data and the sign-in table are the only exceptions.
+        var database = await SqlServer.CreateDatabaseAsync();
+        new DatabaseMigrator(database, TextWriter.Null).Run(appUser: null);
+
+        (await SqlServer.QueryAsync(database, """
+            SELECT t.name + '.' + c.name
+            FROM sys.tables AS t
+            CROSS JOIN (VALUES ('ProfileId'), ('CreatedAt'), ('CreatedBy'), ('UpdatedAt'), ('UpdatedBy')) AS c (name)
+            WHERE SCHEMA_NAME(t.schema_id) = 'app'
+                AND t.name NOT IN ('Currency', 'ExchangeRate', 'AppUser')
+                AND NOT (t.name = 'Profile' AND c.name = 'ProfileId')
+                AND COL_LENGTH('app.' + t.name, c.name) IS NULL
+            """)).ShouldBeEmpty("missing columns (table.column)");
+    }
+
+    [TestMethod]
     public async Task App_data_role_has_no_database_level_permissions()
     {
         var database = await SqlServer.CreateDatabaseAsync();
