@@ -22,6 +22,7 @@ import { DisplayCurrencyService } from './display-currency.service';
   `,
   styles: `
     .switcher {
+      flex-wrap: wrap;
       display: flex;
       align-items: center;
       gap: 8px;
@@ -29,6 +30,8 @@ import { DisplayCurrencyService } from './display-currency.service';
       color: var(--fg-muted);
     }
     select {
+      max-width: 100%;
+      min-width: 0;
       min-height: 44px;
       padding: 0 10px;
       border-radius: 10px;
