@@ -61,6 +61,15 @@ public sealed class ProfileTests
     }
 
     [TestMethod]
+    public async Task Simultaneous_first_sign_ins_create_one_profile()
+    {
+        var signIns = await Task.WhenAll(Enumerable.Range(0, 5).Select(_ => SignInAsync("racing-owner")));
+
+        signIns.SelectMany(s => s.Profiles).Select(p => p.Id).Distinct().ShouldHaveSingleItem();
+        signIns.Select(s => s.User.Id).Distinct().ShouldHaveSingleItem();
+    }
+
+    [TestMethod]
     public async Task An_owner_reads_renames_and_lists_their_profile()
     {
         var profileId = (await SignInAsync("owner-a")).Profiles[0].Id;
