@@ -33,12 +33,14 @@ public sealed record PayoffComparison(PayoffSummary WithoutExtra, PayoffSummary 
 }
 
 /// <summary>
-/// Computes a loan's payment schedule. Conventions (defaults, see the needs-decision issue on #41):
-/// - monthly interest is the balance times the annual rate / 12, using the rate in effect on the first
-///   day of each interest month (the day after the previous payment); a rate change applies from the
-///   first interest month that starts on or after its date;
-/// - a first interest period that is not a whole month (a mid-month payout) is prorated by 30/360 days,
-///   and the difference from a whole month's interest changes the first payment, not the loan;
+/// Computes a loan's payment schedule. Conventions (decided with the owner in #109):
+/// - interest is the balance times the annual rate times the days since the previous payment over 365
+///   (actual/365, as the bank charges; <see cref="DayCount.Thirty360"/> gives 1/12 a month), using the
+///   rate in effect on the first day of each interest month (the day after the previous payment); a rate
+///   change applies from the first interest month that starts on or after its date;
+/// - the annuity payment is fixed (PMT at rate / 12), so principal is what the payment leaves after
+///   that month's interest. A first period longer or shorter than a month changes the first payment by
+///   the extra (or missing) days of interest, not the loan;
 /// - an annuity payment is recalculated over the remaining term whenever the rate changes, like
 ///   Excel's PMT;
 /// - an extra payment is paid with the regular payment on or after its date and keeps the payment:
@@ -73,12 +75,16 @@ public static class LoanSchedule
             var accrualStart = number == 1 ? loan.Start : previous.AddDays(1);
             var period = loan.PeriodOn(accrualStart);
             var rate = period.RateOn(accrualStart);
+            // Interest runs from the previous payment (or the payout) to this payment. The regular
+            // month is the one an annuity payment is made for: the same, except for a first period
+            // that starts more or less than a month before the first payment.
             // A payout exactly a month before the first payment is a whole month (also at month ends).
-            var monthsOfInterest = number == 1 && loan.Start != loan.FirstPaymentDate.AddMonths(-1)
-                ? Days30360(loan.Start, date) / 30m
-                : 1m;
-            var monthInterest = Round(balance * rate / 12m, currency);
-            var interest = monthsOfInterest == 1m ? monthInterest : Round(balance * rate / 12m * monthsOfInterest, currency);
+            var wholeMonth = number > 1 || loan.Start == date.AddMonths(-1);
+            var periodStart = number == 1 ? loan.Start : previous;
+            var interest = Round(balance * rate * YearFraction(loan.DayCount, periodStart, date, wholeMonth), currency);
+            var monthInterest = wholeMonth
+                ? interest
+                : Round(balance * rate * YearFraction(loan.DayCount, date.AddMonths(-1), date, wholeMonth: true), currency);
 
             decimal principal;
             switch (period.RepaymentType)
@@ -210,6 +216,18 @@ public static class LoanSchedule
         var left = (balance * growth) - (payment * annuityFactor);
         return left <= halfMinorUnit * annuityFactor ? months : months + 1;
     }
+
+    /// <summary>
+    /// The part of a year that interest runs for between two dates. On 30/360 a whole schedule month
+    /// is exactly 1/12, also when it starts on the 31st or ends in February.
+    /// </summary>
+    internal static decimal YearFraction(DayCount dayCount, DateOnly from, DateOnly to, bool wholeMonth) => dayCount switch
+    {
+        // Leap years too: the year is 365 days, so a 29 February adds a day's interest.
+        DayCount.Actual365 => (to.DayNumber - from.DayNumber) / 365m,
+        DayCount.Thirty360 => wholeMonth ? 1m / 12m : Days30360(from, to) / 360m,
+        _ => throw new ArgumentOutOfRangeException(nameof(dayCount), dayCount, "Unknown day count."),
+    };
 
     /// <summary>Days between two dates on a 30/360 basis (every month counts as 30 days).</summary>
     internal static int Days30360(DateOnly from, DateOnly to)
