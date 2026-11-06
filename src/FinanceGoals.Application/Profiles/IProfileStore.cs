@@ -30,6 +30,9 @@ public interface IProfileStore
     /// </summary>
     Task<IReadOnlyList<ProfileSummary>> EnsureForUserAsync(int userId, CancellationToken cancellationToken);
 
+    /// <summary>The user's profiles, without creating one.</summary>
+    Task<IReadOnlyList<ProfileSummary>> ForUserAsync(int userId, CancellationToken cancellationToken);
+
     /// <summary>The access of the Google account to a profile, or null if it is not a member.</summary>
     Task<ProfileAccess?> AccessAsync(string googleSubject, int profileId, CancellationToken cancellationToken);
 

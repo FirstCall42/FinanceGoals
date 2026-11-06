@@ -85,9 +85,7 @@ export class AuthService {
 
     this.token.set(credential);
     try {
-      const signedIn = await firstValueFrom(
-        this.http.post<{ user: User; profiles: Profile[] }>(this.config.apiUrl('/api/me'), null),
-      );
+      const signedIn = await this.me();
       this.user.set(signedIn.user);
       this.profiles.set(signedIn.profiles);
       this.error.set(undefined);
@@ -100,6 +98,25 @@ export class AuthService {
       this.clear();
       this.error.set("Signing in didn't work. Try again.");
     }
+  }
+
+  /** Reloads the user and their profiles, e.g. after joining a household. */
+  async refresh(): Promise<void> {
+    if (this.token()) {
+      const signedIn = await this.me();
+      this.user.set(signedIn.user);
+      this.profiles.set(signedIn.profiles);
+    }
+  }
+
+  private me(): Promise<{ user: User; profiles: Profile[] }> {
+    // On an invite link the person is about to join a household, so the API shouldn't create an
+    // empty one of their own.
+    const joining = window.location.pathname.startsWith('/invite/');
+    const path = joining ? '/api/me?createProfile=false' : '/api/me';
+    return firstValueFrom(
+      this.http.post<{ user: User; profiles: Profile[] }>(this.config.apiUrl(path), null),
+    );
   }
 
   private async load(): Promise<void> {

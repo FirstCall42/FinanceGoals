@@ -28,6 +28,7 @@ public static class InfrastructureServices
         services.AddSingleton<ICurrencyCatalog, SqlCurrencyCatalog>();
         services.AddSingleton<IAppUserStore, SqlAppUserStore>();
         services.AddSingleton<IProfileStore, SqlProfileStore>();
+        services.AddSingleton<IProfileInviteStore, SqlProfileInviteStore>();
         services.AddSingleton<SqlExchangeRateStore>();
         services.AddSingleton<IExchangeRateStore>(provider => provider.GetRequiredService<SqlExchangeRateStore>());
         services.AddSingleton<IEurRates>(provider => provider.GetRequiredService<SqlExchangeRateStore>());
