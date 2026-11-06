@@ -137,6 +137,32 @@ public sealed class LoanTests
     }
 
     [TestMethod]
+    public async Task Numbers_as_names_and_out_of_range_fees_are_a_400_not_a_500()
+    {
+        var profileId = await ProfileOfAsync("loan-owner-5");
+        var path = $"/api/profiles/{profileId}/loans";
+        object Loan(string name, string dayCount = "ActualActual", string rateType = "Variable", string repayment = "Annuity", decimal fee = 0m) => new
+        {
+            name,
+            currencyCode = "NOK",
+            principal = 100m,
+            paidOut = "2026-01-01",
+            firstPaymentDate = "2026-02-01",
+            termMonths = 12,
+            feePerPayment = fee,
+            dayCount,
+            periods = new object[] { new { start = "2026-01-01", rateType, repaymentType = repayment, rates = new object[] { new { effectiveFrom = "2026-01-01", annualRatePercent = 5m } } } },
+        };
+
+        (await SendAsync(HttpMethod.Post, path, "loan-owner-5", Loan("A", dayCount: "7"))).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await SendAsync(HttpMethod.Post, path, "loan-owner-5", Loan("B", rateType: "5"))).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await SendAsync(HttpMethod.Post, path, "loan-owner-5", Loan("C", repayment: "Annuity,InterestOnly"))).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await SendAsync(HttpMethod.Post, path, "loan-owner-5", Loan("D", fee: 100_000_000_000_000_000_000m))).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await SendAsync(HttpMethod.Post, path, "loan-owner-5", Loan("E", fee: 10.123456m))).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await SendAsync(HttpMethod.Post, path, "loan-owner-5", Loan("F", fee: 10.12m))).StatusCode.ShouldBe(HttpStatusCode.Created);
+    }
+
+    [TestMethod]
     public async Task Another_household_sees_none_of_it_and_cannot_change_it()
     {
         var profileA = await ProfileOfAsync("loan-owner-4a");

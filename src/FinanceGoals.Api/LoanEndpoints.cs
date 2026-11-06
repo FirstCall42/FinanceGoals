@@ -115,6 +115,14 @@ internal static class LoanEndpoints
         return profile;
     }
 
+    // Only the exact names: Enum.TryParse also takes numbers ("7") and comma lists, which the database would refuse with a 500.
+    private static bool TryName<T>(string? text, out T value)
+        where T : struct, Enum
+    {
+        value = default;
+        return text is not null && Enum.GetNames<T>().Contains(text, StringComparer.Ordinal) && Enum.TryParse(text, out value);
+    }
+
     private static (Loan? Loan, Dictionary<string, string[]> Errors) Build(CreateLoan r, Dictionary<string, int> minorUnits)
     {
         var errors = new Dictionary<string, string[]>();
@@ -145,9 +153,11 @@ internal static class LoanEndpoints
             errors["termMonths"] = ["The term must be 1 to 600 months."];
         }
 
-        if (r.FeePerPayment is < 0)
+        if (r.FeePerPayment is { } feeAmount
+            && (feeAmount < 0 || feeAmount > 1_000_000_000_000m
+                || (r.CurrencyCode is not null && minorUnits.TryGetValue(r.CurrencyCode, out var feeUnits) && decimal.Round(feeAmount, feeUnits) != feeAmount)))
         {
-            errors["feePerPayment"] = ["The fee cannot be negative."];
+            errors["feePerPayment"] = ["The fee cannot be negative, and is in whole minor units (øre, cents)."];
         }
 
         if (r.Periods is null or { Count: 0 })
@@ -156,7 +166,7 @@ internal static class LoanEndpoints
         }
 
         var dayCount = DayCount.ActualActual;
-        if (r.DayCount is not null && !Enum.TryParse(r.DayCount, out dayCount))
+        if (r.DayCount is not null && !TryName(r.DayCount, out dayCount))
         {
             errors["dayCount"] = ["Use ActualActual or Thirty360."];
         }
@@ -171,7 +181,7 @@ internal static class LoanEndpoints
             var currency = new Currency(r.CurrencyCode!, minorUnits[r.CurrencyCode!]);
             var periods = r.Periods!.Select(p =>
             {
-                if (p.Start is not { } start || p.Rates is null || !Enum.TryParse<RateType>(p.RateType, out var rateType) || !Enum.TryParse<RepaymentType>(p.RepaymentType, out var repayment))
+                if (p.Start is not { } start || p.Rates is null || !TryName(p.RateType, out RateType rateType) || !TryName(p.RepaymentType, out RepaymentType repayment))
                 {
                     throw new ArgumentException("Each period needs a start day, a rate type (Variable or Fixed), a repayment type (Annuity, StraightLine or InterestOnly) and rates.");
                 }
