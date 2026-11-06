@@ -28,3 +28,5 @@ Thumbs.db
 
 # Tool logs
 tools/github/.ruleset-error.log
+test-results/
+playwright-report/
