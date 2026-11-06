@@ -311,6 +311,7 @@ internal static class ProfileEndpoints
             .WithSummary("Deletes one account's balance on a date.");
 
         profile.MapNetWorth();
+        profile.MapLoans();
 
         return profile;
     }
