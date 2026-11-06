@@ -6,6 +6,7 @@ import { DisplayCurrencyService } from '../currency/display-currency.service';
 import { MissingRate } from '../money/missing-rate';
 import { MoneyPipe } from '../money/money.pipe';
 import { messageOf } from '../profile/profile.service';
+import { NetWorthChart } from './net-worth-chart';
 import { NetWorth, NetWorthPoint, NetWorthService } from './net-worth.service';
 
 /**
@@ -16,7 +17,7 @@ import { NetWorth, NetWorthPoint, NetWorthService } from './net-worth.service';
  */
 @Component({
   selector: 'app-net-worth',
-  imports: [MoneyPipe, MissingRate],
+  imports: [MoneyPipe, MissingRate, NetWorthChart],
   template: `
     <section class="panel" aria-labelledby="nw-title">
       <h1 id="nw-title">Net worth</h1>
@@ -107,6 +108,28 @@ import { NetWorth, NetWorthPoint, NetWorthService } from './net-worth.service';
 
           @if (history().length > 0) {
             <h2>Month by month</h2>
+            <app-net-worth-chart [points]="history()" [currency]="nw.currency" />
+            @if (historyMissing(); as missing) {
+              <app-missing-rate [currencyCodes]="missing.codes" [date]="missing.from" />
+              <p class="note">
+                {{
+                  missing.from === missing.to
+                    ? 'The month ' + formatDate(missing.from)
+                    : 'The months from ' +
+                      formatDate(missing.from) +
+                      ' to ' +
+                      formatDate(missing.to)
+                }}
+                leave out the accounts in {{ missing.codes.join(' and ') }}, so the lines are too
+                low for those months.
+              </p>
+            }
+            @if (historyRateDate(); as rate) {
+              <p class="note">
+                The history is converted with each month's rates; the oldest used are from
+                {{ formatDate(rate) }}.
+              </p>
+            }
             <div class="table-wrap">
               <table>
                 <thead>
@@ -264,6 +287,25 @@ export class NetWorthPage {
   /** The oldest exchange rate behind any converted line, to say which day's rates the figures use. */
   protected readonly rateDate = computed(() => {
     const dates = (this.current()?.lines ?? []).map((l) => l.rateDate).filter((d) => d !== null);
+    return dates.length > 0 ? dates.reduce((a, b) => (a < b ? a : b)) : undefined;
+  });
+
+  /** Currencies missing a rate in any month of the history, and the first such month. */
+  protected readonly historyMissing = computed(() => {
+    const bad = this.history().filter((p) => p.missingRates.length > 0);
+    return bad.length > 0
+      ? {
+          codes: [...new Set(bad.flatMap((p) => p.missingRates))].sort(),
+          from: bad[0].date,
+          to: bad[bad.length - 1].date,
+        }
+      : undefined;
+  });
+
+  protected readonly historyRateDate = computed(() => {
+    const dates = this.history()
+      .map((p) => p.rateDate)
+      .filter((d) => d !== null);
     return dates.length > 0 ? dates.reduce((a, b) => (a < b ? a : b)) : undefined;
   });
 

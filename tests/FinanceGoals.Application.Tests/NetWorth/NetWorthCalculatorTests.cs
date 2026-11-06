@@ -153,6 +153,25 @@ public sealed class NetWorthCalculatorTests
     }
 
     [TestMethod]
+    public void Each_history_point_names_the_oldest_rate_behind_it_and_none_when_nothing_was_converted()
+    {
+        var usd = new Currency("USD", 2);
+        var to = new DateOnly(2026, 7, 15);
+        Account[] nok = [Acc(1, "Savings", AccountType.Savings, "NOK")];
+        Account[] same = [Acc(2, "Brokerage", AccountType.Brokerage, "USD")];
+        Account[] ron = [Acc(3, "Romania", AccountType.Current, "RON")];
+
+        // NOK in USD uses the NOK rate (2026-01-01) and the USD rate (2026-01-01, then 2026-06-01): the oldest wins.
+        var converted = NetWorthCalculator.Monthly(to, usd, nok, [Val(1, "2026-01-31", 100m)], _minorUnits, _converter);
+        var unconverted = NetWorthCalculator.Monthly(to, usd, same, [Val(2, "2026-01-31", 100m)], _minorUnits, _converter);
+        var missing = NetWorthCalculator.Monthly(to, usd, ron, [Val(3, "2026-01-31", 100m)], _minorUnits, _converter);
+
+        converted.ShouldAllBe(p => p.RateDate == new DateOnly(2026, 1, 1));
+        unconverted.ShouldAllBe(p => p.RateDate == null);
+        missing.ShouldAllBe(p => p.RateDate == null && p.MissingRates.Count == 1 && p.MissingRates[0] == "RON");
+    }
+
+    [TestMethod]
     public void The_history_of_no_balances_is_empty()
     {
         NetWorthCalculator.Monthly(new DateOnly(2026, 4, 15), _nok, [], [], _minorUnits, _converter).ShouldBeEmpty();

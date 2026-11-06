@@ -9,5 +9,6 @@ export interface NetWorthPoint {
   date: string;
   liquid: (number | string);
   missingRates: Array<string>;
+  rateDate: (string | null);
   total: (number | string);
 }
