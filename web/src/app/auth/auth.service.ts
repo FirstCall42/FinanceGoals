@@ -41,12 +41,22 @@ export class AuthService {
   /** False until the client ID is known; stays false when sign-in is not set up. */
   readonly available = signal(false);
   readonly error = signal<string | undefined>(undefined);
+  /** True while the sign-in settings load; the API may be asleep and take a while to answer. */
+  readonly loading = signal(true);
   readonly signedIn = computed(() => this.user() !== undefined);
 
   /** Loads the sign-in settings and Google's script, and restores this tab's sign-in. Runs once. */
   start(): Promise<void> {
     this.starting ??= this.load();
     return this.starting;
+  }
+
+  /** Tries again after the settings failed to load. */
+  retry(): Promise<void> {
+    this.starting = undefined;
+    this.error.set(undefined);
+    this.loading.set(true);
+    return this.start();
   }
 
   /** Draws Google's sign-in button into an element. */
@@ -144,6 +154,8 @@ export class AuthService {
       }
     } catch {
       this.error.set("Sign-in isn't available right now.");
+    } finally {
+      this.loading.set(false);
     }
   }
 }
