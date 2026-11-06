@@ -90,11 +90,27 @@ The app user must be a dedicated single user: the migrator refuses `dbo`, `guest
 | `Migrator__AppUserClientId` | Its client (application) ID, for kind `entra` only |
 | `Migrator__AppUserPassword` | Its password, for kind `password` only. Set on every run, so rotating it here takes effect. Pass it as an environment variable, not `--Migrator:AppUserPassword=`, which shows in process listings |
 
-Locally the database must be contained (`CONTAINMENT = PARTIAL`) so users can have passwords; Docker Compose (#13) will set that up. The migrator tests do the same against SQL Server in Docker, so Docker must be running for `dotnet test`.
+Locally the database must be contained (`CONTAINMENT = PARTIAL`) so users can have passwords; the local stack (below) sets that up. The migrator tests do the same against SQL Server in Docker, so Docker must be running for `dotnet test`.
 
 On Azure SQL, the migrator signs in with its managed identity, which is the server's Entra admin. It creates an `entra` app user from the client ID (`CREATE USER ... WITH SID = <client id>, TYPE = E`), so the server never needs permission to look up names in Entra. If a user with that name already exists for a different identity, the migrator refuses it (error 50004).
 
 CI checks every PR's database scripts (the "Database checks" job): merged migration and seed scripts must be unchanged, both on disk and as embedded in the migrator, and a database built by `main`'s migrator and then upgraded by the PR's must match a fresh build. There are no releases yet, so `main` stands in for the last release. To run these checks locally, build `main`'s migrator and point `FINANCEGOALS_BASE_MIGRATOR` at its `FinanceGoals.Migrator.dll`; without it the test reports inconclusive.
+
+## Local stack
+
+Docker Compose runs everything on your machine: SQL Server, the migrator, the API and the web app.
+
+```sh
+docker compose up --build     # web http://localhost:4200, API http://localhost:5208
+docker compose down           # stop; the database stays in the sql-data volume
+docker compose down -v        # stop and delete the local database
+```
+
+- `db-init` creates the contained database once. The migrator then applies every script and creates the app user, as in the cloud. The seeds load the currencies, and the API imports the ECB exchange rates when it starts (that needs internet).
+- The web container serves the same build as the cloud, with `compose/config.json` pointing it at the API. Sign-in works locally: the Google client allows `http://localhost:4200`, and you sign in with your own Google account.
+- The passwords in `compose.yaml` are for this local stack only. To use your own, copy `.env.example` to `.env`, which git ignores.
+- `ng serve` and the web container both use port 4200, so stop one before starting the other. For quick web changes, start only the API and what it needs (`docker compose up --build api`) and run `ng serve`, which proxies `/api` to port 5208.
+- `sample-data` loads `compose/sample-data.sql` after the migrator: a sample user and household. It is a plain script for this local stack, not a migration or seed, so it never reaches the cloud. Features that add tables (accounts, loans) extend that file.
 
 ## Images
 
