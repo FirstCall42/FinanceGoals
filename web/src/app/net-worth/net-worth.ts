@@ -267,6 +267,8 @@ export class NetWorthPage {
     return dates.length > 0 ? dates.reduce((a, b) => (a < b ? a : b)) : undefined;
   });
 
+  private requests = 0;
+
   protected readonly units = computed(() => this.minorUnits(this.display.current()));
 
   constructor() {
@@ -299,16 +301,25 @@ export class NetWorthPage {
   }
 
   private async load(profileId: number, currency: string, date: string): Promise<void> {
+    // Only the latest request may show its result; a slower, older one is dropped.
+    const request = ++this.requests;
     try {
       const [current, history] = await Promise.all([
         this.service.on(profileId, currency, date),
         this.service.history(profileId, currency, date),
       ]);
-      this.current.set(current);
-      this.history.set(history);
-      this.error.set(undefined);
+      if (request === this.requests) {
+        this.current.set(current);
+        this.history.set(history);
+        this.error.set(undefined);
+      }
     } catch (error) {
-      this.error.set(messageOf(error));
+      if (request === this.requests) {
+        // No old figures beside the error.
+        this.current.set(undefined);
+        this.history.set([]);
+        this.error.set(messageOf(error));
+      }
     }
   }
 }
