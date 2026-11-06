@@ -9,6 +9,7 @@ import {
   ScheduleRow,
 } from './loan-calculator.service';
 import { SavedLoan, SavedLoanService } from './saved-loan.service';
+import { DateField, formatDate } from '../date/date-field';
 import { ExtraVsInvest } from './extra-vs-invest-panel';
 import { PayoffChart } from './payoff-chart';
 import { LoanInput, defaultInput, formatMonths, isoDate, toRequest } from './loan-input';
@@ -31,7 +32,7 @@ interface ScheduleYear {
  */
 @Component({
   selector: 'app-loan-calculator',
-  imports: [MoneyPipe, PayoffChart, ExtraVsInvest],
+  imports: [DateField, MoneyPipe, PayoffChart, ExtraVsInvest],
   templateUrl: './loan-calculator.html',
   styleUrl: './loan-calculator.scss',
 })
@@ -247,7 +248,7 @@ export class LoanCalculator {
   }
 
   protected date(value: string): string {
-    return new Date(`${value}T00:00:00Z`).toLocaleDateString('nb-NO', { timeZone: 'UTC' });
+    return formatDate(value);
   }
 
   protected percent(value: number): string {
