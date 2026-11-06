@@ -26,6 +26,9 @@ param migratorImage string = 'mcr.microsoft.com/k8se/quickstart:latest'
 @description('Daily Log Analytics ingestion cap in GB. Two environments at 0.05 GB stay well under the free 5 GB a month.')
 param logDailyCapGb string = '0.05'
 
+@description('Google OAuth client ID for sign-in (#24). Not a secret: the web app shows it to the browser. Empty turns sign-in off.')
+param googleClientId string = ''
+
 var app = 'financegoals'
 // Short form for resource names, matching the resource groups (rg-financegoals-test, -prod).
 var env = environmentName == 'production' ? 'prod' : 'test'
@@ -90,6 +93,7 @@ module containerApps 'modules/container-apps.bicep' = {
     migratorClientId: identities.outputs.migratorClientId
     sqlServerFqdn: sql.outputs.serverFqdn
     webOrigin: web.outputs.url
+    googleClientId: googleClientId
     databaseName: sql.outputs.databaseName
     tags: tags
   }

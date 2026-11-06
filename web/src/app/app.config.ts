@@ -1,4 +1,4 @@
-import { provideHttpClient, withFetch } from '@angular/common/http';
+import { provideHttpClient, withFetch, withInterceptors } from '@angular/common/http';
 import {
   ApplicationConfig,
   inject,
@@ -7,13 +7,15 @@ import {
 } from '@angular/core';
 import { provideRouter } from '@angular/router';
 import { routes } from './app.routes';
+import { authInterceptor } from './auth/auth.interceptor';
 import { AppConfig } from './config/app-config';
 
 export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
     provideRouter(routes),
-    provideHttpClient(withFetch()),
+    // The interceptor adds the sign-in token to requests to our API.
+    provideHttpClient(withFetch(), withInterceptors([authInterceptor])),
     // Read config.json (the API base URL) before the app starts.
     provideAppInitializer(() => inject(AppConfig).load()),
   ],

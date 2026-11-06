@@ -19,6 +19,8 @@ param migratorClientId string
 param sqlServerFqdn string
 @description('The web app origin (Static Web App URL), the only origin the API accepts cross-origin requests from.')
 param webOrigin string
+@description('Google OAuth client ID the API accepts sign-in tokens for; empty turns sign-in off.')
+param googleClientId string
 param databaseName string
 param tags object
 
@@ -107,6 +109,7 @@ resource api 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'ASPNETCORE_ENVIRONMENT', value: aspNetCoreEnvironment }
             { name: 'ConnectionStrings__App', value: '${sqlConnection};User Id=${apiClientId}' }
             { name: 'Cors__AllowedOrigins__0', value: webOrigin }
+            { name: 'Auth__Google__ClientId', value: googleClientId }
           ]
           probes: isPlaceholder ? [] : apiProbes
         }
