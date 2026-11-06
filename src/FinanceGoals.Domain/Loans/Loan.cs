@@ -12,6 +12,19 @@ public enum RateType
     Fixed,
 }
 
+/// <summary>How interest days are counted.</summary>
+public enum DayCount
+{
+    /// <summary>
+    /// Actual days over the days in that year (365, or 366 in a leap year): the bank's count in a
+    /// normal year (checked against a statement), and a whole year is exactly the annual rate. The default.
+    /// </summary>
+    ActualActual,
+
+    /// <summary>Every month is 30 days of a 360-day year: each whole month is exactly 1/12 of the rate.</summary>
+    Thirty360,
+}
+
 /// <summary>How principal is repaid in a period.</summary>
 public enum RepaymentType
 {
@@ -106,6 +119,7 @@ public sealed class Loan
 
     // paidOut: the day the loan was paid out. Defaults to a month before the first payment; banks
     // often pay out mid-month, making the first interest period longer or shorter than a month.
+    // dayCount: how interest days are counted; the bank's actual/365 unless a test needs round months.
     public Loan(
         string name,
         Money principal,
@@ -113,7 +127,8 @@ public sealed class Loan
         int termMonths,
         IReadOnlyList<LoanPeriod> periods,
         Money? feePerPayment = null,
-        DateOnly? paidOut = null)
+        DateOnly? paidOut = null,
+        DayCount dayCount = DayCount.ActualActual)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentNullException.ThrowIfNull(periods);
@@ -176,6 +191,7 @@ public sealed class Loan
         TermMonths = termMonths;
         FeePerPayment = fee;
         Start = start;
+        DayCount = dayCount;
         _periods = ordered;
     }
 
@@ -195,6 +211,8 @@ public sealed class Loan
 
     /// <summary>The day the loan was paid out; interest runs from here to the first payment.</summary>
     public DateOnly Start { get; }
+
+    public DayCount DayCount { get; }
 
     /// <summary>The day of the last payment.</summary>
     public DateOnly LastPaymentDate => FirstPaymentDate.AddMonths(TermMonths - 1);
@@ -234,6 +252,6 @@ public sealed class Loan
         var rates = period.Rates.Where(rate => rate.EffectiveFrom != change.EffectiveFrom).Append(change).ToArray();
         var updated = new LoanPeriod(period.Start, period.RateType, period.RepaymentType, rates);
         var periods = _periods.Select(p => ReferenceEquals(p, period) ? updated : p).ToArray();
-        return new Loan(Name, Principal, FirstPaymentDate, TermMonths, periods, FeePerPayment, Start);
+        return new Loan(Name, Principal, FirstPaymentDate, TermMonths, periods, FeePerPayment, Start, DayCount);
     }
 }

@@ -33,12 +33,15 @@ public sealed record PayoffComparison(PayoffSummary WithoutExtra, PayoffSummary 
 }
 
 /// <summary>
-/// Computes a loan's payment schedule. Conventions (defaults, see the needs-decision issue on #41):
-/// - monthly interest is the balance times the annual rate / 12, using the rate in effect on the first
-///   day of each interest month (the day after the previous payment); a rate change applies from the
-///   first interest month that starts on or after its date;
-/// - a first interest period that is not a whole month (a mid-month payout) is prorated by 30/360 days,
-///   and the difference from a whole month's interest changes the first payment, not the loan;
+/// Computes a loan's payment schedule. Conventions (decided with the owner in #109):
+/// - interest is the balance times the annual rate times the days since the previous payment over the
+///   days in the year (actual/actual, as the bank charges; <see cref="DayCount.Thirty360"/> gives 1/12 a month), using the
+///   rate in effect on the first day of each interest month (the day after the previous payment); a rate
+///   change applies from the first interest month that starts on or after its date;
+/// - the annuity payment is fixed: the level payment for the remaining months at the current rate,
+///   counting each month's real days (PMT; on 30/360 exactly Excel's PMT at rate / 12), so principal is what the payment leaves after
+///   that month's interest. A first period longer or shorter than a month changes the first payment by
+///   the extra (or missing) days of interest, not the loan;
 /// - an annuity payment is recalculated over the remaining term whenever the rate changes, like
 ///   Excel's PMT;
 /// - an extra payment is paid with the regular payment on or after its date and keeps the payment:
@@ -73,12 +76,16 @@ public static class LoanSchedule
             var accrualStart = number == 1 ? loan.Start : previous.AddDays(1);
             var period = loan.PeriodOn(accrualStart);
             var rate = period.RateOn(accrualStart);
+            // Interest runs from the previous payment (or the payout) to this payment. The regular
+            // month is the one an annuity payment is made for: the same, except for a first period
+            // that starts more or less than a month before the first payment.
             // A payout exactly a month before the first payment is a whole month (also at month ends).
-            var monthsOfInterest = number == 1 && loan.Start != loan.FirstPaymentDate.AddMonths(-1)
-                ? Days30360(loan.Start, date) / 30m
-                : 1m;
-            var monthInterest = Round(balance * rate / 12m, currency);
-            var interest = monthsOfInterest == 1m ? monthInterest : Round(balance * rate / 12m * monthsOfInterest, currency);
+            var wholeMonth = number > 1 || loan.Start == date.AddMonths(-1);
+            var periodStart = number == 1 ? loan.Start : previous;
+            var interest = Round(Interest(balance, rate, loan.DayCount, periodStart, date, wholeMonth), currency);
+            var monthInterest = wholeMonth
+                ? interest
+                : Round(Interest(balance, rate, loan.DayCount, date.AddMonths(-1), date, wholeMonth: true), currency);
 
             decimal principal;
             switch (period.RepaymentType)
@@ -86,13 +93,15 @@ public static class LoanSchedule
                 case RepaymentType.Annuity:
                     if (annuityRate != rate)
                     {
-                        annuityPayment = Round(AnnuityPayment(balance, rate / 12m, remaining), currency);
+                        annuityPayment = Round(LevelPayment(loan, number, balance, rate, remaining), currency);
                         annuityRate = rate;
                     }
 
                     // Principal is repaid as if the month were whole; the extra (or missing) interest days
                     // of a prorated first period are added to (or taken off) the payment, not the loan.
-                    principal = Math.Max(annuityPayment - monthInterest, 0);
+                    // The payment stays fixed: at very high rates a 31-day month's interest can exceed it,
+                    // and then the shortfall (negative principal) is added to the balance.
+                    principal = annuityPayment - monthInterest;
                     break;
                 case RepaymentType.InterestOnly:
                     principal = 0;
@@ -116,7 +125,7 @@ public static class LoanSchedule
             if (extra > 0 && balance > 0 && isAnnuity)
             {
                 // Keep the payment, shorten the term: the months the payment needs to clear what is left.
-                repaymentMonthsLeft = Math.Min(remaining, PaymentsToRepay(balance, rate / 12m, annuityPayment, currency.MinorUnits) + 1);
+                repaymentMonthsLeft = Math.Min(remaining, MonthsToRepay(loan, number + 1, balance, rate, annuityPayment, currency.MinorUnits) + 1);
             }
 
             if (isAnnuity)
@@ -209,6 +218,88 @@ public static class LoanSchedule
         var annuityFactor = monthlyRate == 0 ? months : (growth - 1) / monthlyRate;
         var left = (balance * growth) - (payment * annuityFactor);
         return left <= halfMinorUnit * annuityFactor ? months : months + 1;
+    }
+
+    /// <summary>
+    /// Interest on a balance between two dates, unrounded. It multiplies before it divides, so an
+    /// exact half minor unit stays exact and rounds away from zero.
+    /// </summary>
+    internal static decimal Interest(decimal balance, decimal annualRate, DayCount dayCount, DateOnly from, DateOnly to, bool wholeMonth)
+    {
+        switch (dayCount)
+        {
+            case DayCount.ActualActual:
+                // Days in each calendar year over that year's length (365 or 366), so a year's
+                // interest is exactly the annual rate and a leap day adds no drift.
+                var interest = 0m;
+                for (var start = from; start < to;)
+                {
+                    var yearEnd = new DateOnly(start.Year + 1, 1, 1);
+                    var end = to < yearEnd ? to : yearEnd;
+                    var daysInYear = DateTime.IsLeapYear(start.Year) ? 366 : 365;
+                    interest += balance * annualRate * (end.DayNumber - start.DayNumber) / daysInYear;
+                    start = end;
+                }
+
+                return interest;
+            case DayCount.Thirty360:
+                // A whole schedule month is exactly 1/12, also from the 31st or to the end of February.
+                return wholeMonth ? balance * annualRate / 12m : balance * annualRate * Days30360(from, to) / 360m;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(dayCount), dayCount, "Unknown day count.");
+        }
+    }
+
+    /// <summary>
+    /// The level payment that repays a balance over the given payments, from payment
+    /// <paramref name="number"/> on, at one rate with the loan's day count: PMT with each month's real
+    /// interest, so the schedule ends on time instead of leaving month-length residue to compound. On
+    /// 30/360 it is exactly <see cref="AnnuityPayment"/>.
+    /// </summary>
+    internal static decimal LevelPayment(Loan loan, int number, decimal balance, decimal annualRate, int months)
+    {
+        // After n payments: balance·Π(1 + g) − P·S, where g is each month's rate and S sums the growth
+        // of each payment to the end. Zero balance gives P = balance·Π / S.
+        var growth = 1m;
+        var sum = 0m;
+        for (var k = number + months - 1; k >= number; k--)
+        {
+            sum += growth;
+            growth *= 1 + MonthRate(loan, k, annualRate);
+        }
+
+        return balance * growth / sum;
+    }
+
+    /// <summary>
+    /// How many payments, from payment <paramref name="number"/> on, a level payment needs to repay a
+    /// balance with the loan's day count (NPER, rounded up). Like <see cref="PaymentsToRepay"/>, what a
+    /// payment rounded down by half a minor unit leaves is taken by the last payment, not a new month.
+    /// </summary>
+    internal static int MonthsToRepay(Loan loan, int number, decimal balance, decimal annualRate, decimal payment, int minorUnits)
+    {
+        var halfMinorUnit = 0.5m / (decimal)Math.Pow(10, minorUnits);
+        var factor = 0m;
+        for (var months = 1; number + months - 1 <= loan.TermMonths; months++)
+        {
+            var growth = 1 + MonthRate(loan, number + months - 1, annualRate);
+            balance = (balance * growth) - payment;
+            factor = (factor * growth) + 1;
+            if (balance <= halfMinorUnit * factor)
+            {
+                return months;
+            }
+        }
+
+        return loan.TermMonths - number + 1;
+    }
+
+    /// <summary>The interest rate of payment <paramref name="number"/>'s regular month (a month before the first payment for payment 1).</summary>
+    private static decimal MonthRate(Loan loan, int number, decimal annualRate)
+    {
+        var to = loan.FirstPaymentDate.AddMonths(number - 1);
+        var from = number == 1 ? to.AddMonths(-1) : loan.FirstPaymentDate.AddMonths(number - 2);
+        return Interest(1m, annualRate, loan.DayCount, from, to, wholeMonth: true);
     }
 
     /// <summary>Days between two dates on a 30/360 basis (every month counts as 30 days).</summary>
