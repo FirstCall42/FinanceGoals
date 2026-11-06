@@ -75,7 +75,7 @@ public sealed class InviteTests
         (await accepted.Content.ReadFromJsonAsync<AcceptedInvite>()).ShouldBe(new AcceptedInvite(profileId));
         again.StatusCode.ShouldBe(HttpStatusCode.NotFound);
         var profiles = (await SignInAsync("invitee-1")).Profiles;
-        profiles.ShouldHaveSingleItem().ShouldBe(new ProfileSummary(profileId, IProfileStore.DefaultName, ProfileRole.Member));
+        profiles.ShouldHaveSingleItem().ShouldBe(new ProfileSummary(profileId, IProfileStore.DefaultName, ProfileRole.Member, "NOK"));
         (await SendAsync(HttpMethod.Get, $"/api/profiles/{profileId}/invites", "owner-1")).Content.ReadFromJsonAsync<List<PendingInvite>>().Result.ShouldNotBeNull().ShouldBeEmpty();
     }
 

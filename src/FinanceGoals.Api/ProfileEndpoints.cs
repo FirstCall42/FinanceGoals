@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using FinanceGoals.Application.Currencies;
 using FinanceGoals.Application.Profiles;
 using Microsoft.AspNetCore.Http.HttpResults;
 
@@ -50,26 +51,47 @@ internal static class ProfileEndpoints
         });
 
         profile.MapGet("", async Task<Results<Ok<ProfileSummary>, NotFound>> (HttpContext http, IProfileStore profiles, CancellationToken cancellationToken) =>
-                await profiles.NameAsync(http.Access().ProfileId, cancellationToken) is { } name
-                    ? TypedResults.Ok(new ProfileSummary(http.Access().ProfileId, name, http.Access().Role))
+                await profiles.GetAsync(http.Access().ProfileId, http.Access().Role, cancellationToken) is { } summary
+                    ? TypedResults.Ok(summary)
                     : TypedResults.NotFound())
             .WithName("GetProfile")
             .WithSummary("The profile, with the caller's role in it.");
 
-        profile.MapPatch("", async Task<Results<NoContent, ValidationProblem>> (RenameProfile request, HttpContext http, IProfileStore profiles, CancellationToken cancellationToken) =>
+        profile.MapPatch("", async Task<Results<NoContent, ValidationProblem>> (UpdateProfile request, HttpContext http, IProfileStore profiles, ICurrencyCatalog currencies, CancellationToken cancellationToken) =>
             {
-                var name = request.Name?.Trim() ?? string.Empty;
-                if (name.Length is 0 or > 100)
+                var errors = new Dictionary<string, string[]>();
+                string? name = null;
+                if (request.Name is not null)
                 {
-                    return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["name"] = ["The name must be 1 to 100 characters."] });
+                    name = request.Name.Trim();
+                    if (name.Length is 0 or > 100)
+                    {
+                        errors["name"] = ["The name must be 1 to 100 characters."];
+                    }
                 }
 
-                await profiles.RenameAsync(http.Access().ProfileId, name, http.Access().UserId, cancellationToken);
+                if (request.MainCurrency is not null
+                    && !(await currencies.ListAsync(cancellationToken)).Any(c => c.Code == request.MainCurrency))
+                {
+                    errors["mainCurrency"] = ["Pick one of the supported currencies."];
+                }
+
+                if (request.Name is null && request.MainCurrency is null)
+                {
+                    errors["profile"] = ["Send a name or a main currency to change."];
+                }
+
+                if (errors.Count > 0)
+                {
+                    return TypedResults.ValidationProblem(errors);
+                }
+
+                await profiles.UpdateAsync(http.Access().ProfileId, name, request.MainCurrency, http.Access().UserId, cancellationToken);
                 return TypedResults.NoContent();
             })
             .WithMetadata(new OwnerOnly())
-            .WithName("RenameProfile")
-            .WithSummary("Renames the profile. Owners only.");
+            .WithName("UpdateProfile")
+            .WithSummary("Changes the profile's name and/or main currency. Owners only.");
 
         profile.MapGet("/members", async (HttpContext http, IProfileStore profiles, CancellationToken cancellationToken) =>
                 TypedResults.Ok(await profiles.MembersAsync(http.Access().ProfileId, cancellationToken)))
@@ -108,8 +130,8 @@ internal static class ProfileEndpoints
     }
 }
 
-/// <summary>A new name for a profile.</summary>
-internal sealed record RenameProfile(string? Name);
+/// <summary>New settings for a profile; a null one stays as it is.</summary>
+internal sealed record UpdateProfile(string? Name, string? MainCurrency);
 
 /// <summary>Whom to invite: the email address of their Google account.</summary>
 internal sealed record InviteMember(string? Email);

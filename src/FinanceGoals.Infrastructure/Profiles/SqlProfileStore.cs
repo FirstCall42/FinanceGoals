@@ -21,7 +21,7 @@ internal sealed class SqlProfileStore : IProfileStore
             INSERT INTO app.ProfileMember (ProfileId, UserId, Role, CreatedBy, UpdatedBy)
             VALUES (@ProfileId, @UserId, 'Owner', @UserId, @UserId);
         END;
-        SELECT p.Id, p.Name, m.Role
+        SELECT p.Id, p.Name, m.Role, p.MainCurrency
         FROM app.ProfileMember m JOIN app.Profile p ON p.Id = m.ProfileId
         WHERE m.UserId = @UserId
         ORDER BY p.Id;
@@ -51,7 +51,7 @@ internal sealed class SqlProfileStore : IProfileStore
         var profiles = new List<ProfileSummary>();
         while (await reader.ReadAsync(cancellationToken))
         {
-            profiles.Add(new ProfileSummary(reader.GetInt32(0), reader.GetString(1), ParseRole(reader.GetString(2))));
+            profiles.Add(new ProfileSummary(reader.GetInt32(0), reader.GetString(1), ParseRole(reader.GetString(2)), reader.GetString(3)));
         }
 
         return profiles;
@@ -62,7 +62,7 @@ internal sealed class SqlProfileStore : IProfileStore
         await using var connection = await OpenAsync(cancellationToken);
         await using var command = new SqlCommand(
             """
-            SELECT p.Id, p.Name, m.Role
+            SELECT p.Id, p.Name, m.Role, p.MainCurrency
             FROM app.ProfileMember m JOIN app.Profile p ON p.Id = m.ProfileId
             WHERE m.UserId = @UserId
             ORDER BY p.Id;
@@ -73,7 +73,7 @@ internal sealed class SqlProfileStore : IProfileStore
         var profiles = new List<ProfileSummary>();
         while (await reader.ReadAsync(cancellationToken))
         {
-            profiles.Add(new ProfileSummary(reader.GetInt32(0), reader.GetString(1), ParseRole(reader.GetString(2))));
+            profiles.Add(new ProfileSummary(reader.GetInt32(0), reader.GetString(1), ParseRole(reader.GetString(2)), reader.GetString(3)));
         }
 
         return profiles;
@@ -91,21 +91,30 @@ internal sealed class SqlProfileStore : IProfileStore
             : null;
     }
 
-    public async Task<string?> NameAsync(int profileId, CancellationToken cancellationToken)
+    public async Task<ProfileSummary?> GetAsync(int profileId, ProfileRole role, CancellationToken cancellationToken)
     {
         await using var connection = await OpenAsync(cancellationToken);
-        await using var command = new SqlCommand("SELECT Name FROM app.Profile WHERE Id = @ProfileId;", connection);
+        await using var command = new SqlCommand("SELECT Name, MainCurrency FROM app.Profile WHERE Id = @ProfileId;", connection);
         command.Parameters.Add(new SqlParameter("@ProfileId", SqlDbType.Int) { Value = profileId });
-        return await command.ExecuteScalarAsync(cancellationToken) as string;
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        return await reader.ReadAsync(cancellationToken)
+            ? new ProfileSummary(profileId, reader.GetString(0), role, reader.GetString(1))
+            : null;
     }
 
-    public async Task RenameAsync(int profileId, string name, int byUserId, CancellationToken cancellationToken)
+    public async Task UpdateAsync(int profileId, string? name, string? mainCurrency, int byUserId, CancellationToken cancellationToken)
     {
         await using var connection = await OpenAsync(cancellationToken);
         await using var command = new SqlCommand(
-            "UPDATE app.Profile SET Name = @Name, UpdatedAt = SYSUTCDATETIME(), UpdatedBy = @UserId WHERE Id = @ProfileId;",
+            """
+            UPDATE app.Profile
+            SET Name = COALESCE(@Name, Name), MainCurrency = COALESCE(@MainCurrency, MainCurrency),
+                UpdatedAt = SYSUTCDATETIME(), UpdatedBy = @UserId
+            WHERE Id = @ProfileId;
+            """,
             connection);
-        command.Parameters.Add(new SqlParameter("@Name", SqlDbType.NVarChar, 100) { Value = name });
+        command.Parameters.Add(new SqlParameter("@Name", SqlDbType.NVarChar, 100) { Value = (object?)name ?? DBNull.Value });
+        command.Parameters.Add(new SqlParameter("@MainCurrency", SqlDbType.Char, 3) { Value = (object?)mainCurrency ?? DBNull.Value });
         command.Parameters.Add(new SqlParameter("@UserId", SqlDbType.Int) { Value = byUserId });
         command.Parameters.Add(new SqlParameter("@ProfileId", SqlDbType.Int) { Value = profileId });
         await command.ExecuteNonQueryAsync(cancellationToken);

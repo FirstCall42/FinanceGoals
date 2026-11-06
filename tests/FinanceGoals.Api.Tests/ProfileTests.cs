@@ -86,9 +86,41 @@ public sealed partial class ProfileTests
         var members = await (await SendAsync(HttpMethod.Get, $"/api/profiles/{profileId}/members", "owner-a")).Content.ReadFromJsonAsync<List<ProfileMember>>();
 
         renamed.StatusCode.ShouldBe(HttpStatusCode.NoContent);
-        profile.ShouldBe(new ProfileSummary(profileId, "The Lunds", ProfileRole.Owner));
+        profile.ShouldBe(new ProfileSummary(profileId, "The Lunds", ProfileRole.Owner, "NOK"));
         members.ShouldNotBeNull().ShouldHaveSingleItem().Email.ShouldBe("owner-a@example.com");
         (await SendAsync(HttpMethod.Patch, $"/api/profiles/{profileId}", "owner-a", new { name = " " })).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [TestMethod]
+    public async Task The_main_currency_starts_as_NOK_and_an_owner_changes_it_for_every_member()
+    {
+        var first = await SignInAsync("owner-e");
+        var profileId = first.Profiles[0].Id;
+        var memberId = (await SignInAsync("member-e")).User.Id;
+        await AddMemberAsync(profileId, memberId);
+        first.Profiles[0].MainCurrency.ShouldBe("NOK");
+
+        var changed = await SendAsync(HttpMethod.Patch, $"/api/profiles/{profileId}", "owner-e", new { mainCurrency = "EUR" });
+        var asOwner = (await SignInAsync("owner-e")).Profiles.Single(p => p.Id == profileId);
+        var asMember = (await SignInAsync("member-e")).Profiles.Single(p => p.Id == profileId);
+
+        changed.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        asOwner.MainCurrency.ShouldBe("EUR");
+        asMember.MainCurrency.ShouldBe("EUR");
+        asOwner.Name.ShouldBe(IProfileStore.DefaultName);
+        (await SendAsync(HttpMethod.Patch, $"/api/profiles/{profileId}", "member-e", new { mainCurrency = "USD" })).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await SendAsync(HttpMethod.Get, $"/api/profiles/{profileId}", "member-e")).Content.ReadFromJsonAsync<ProfileSummary>().Result.ShouldNotBeNull().MainCurrency.ShouldBe("EUR");
+    }
+
+    [TestMethod]
+    public async Task An_unknown_currency_or_an_empty_change_is_refused()
+    {
+        var profileId = (await SignInAsync("owner-f")).Profiles[0].Id;
+
+        (await SendAsync(HttpMethod.Patch, $"/api/profiles/{profileId}", "owner-f", new { mainCurrency = "XXQ" })).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await SendAsync(HttpMethod.Patch, $"/api/profiles/{profileId}", "owner-f", new { mainCurrency = "nok" })).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await SendAsync(HttpMethod.Patch, $"/api/profiles/{profileId}", "owner-f", new { })).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await SignInAsync("owner-f")).Profiles[0].MainCurrency.ShouldBe("NOK");
     }
 
     [TestMethod]

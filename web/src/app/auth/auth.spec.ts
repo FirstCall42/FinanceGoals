@@ -49,12 +49,14 @@ describe('Sign-in', () => {
     expect(request.request.headers.get('Authorization')).toBe(`Bearer ${credential}`);
     request.flush({
       user: { id: 7, email: 'owner@example.com', name: 'Owner' },
-      profiles: [{ id: 3, name: 'Household', role: 'Owner' }],
+      profiles: [{ id: 3, name: 'Household', role: 'Owner', mainCurrency: 'NOK' }],
     });
     await signingIn;
 
     expect(auth.user()).toEqual({ id: 7, email: 'owner@example.com', name: 'Owner' });
-    expect(auth.profiles()).toEqual([{ id: 3, name: 'Household', role: 'Owner' }]);
+    expect(auth.profiles()).toEqual([
+      { id: 3, name: 'Household', role: 'Owner', mainCurrency: 'NOK' },
+    ]);
     expect(sessionStorage.getItem('financegoals.idToken')).toBe(credential);
   });
 
