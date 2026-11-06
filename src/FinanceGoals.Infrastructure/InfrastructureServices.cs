@@ -1,7 +1,9 @@
 using FinanceGoals.Application.Currencies;
+using FinanceGoals.Application.Users;
 using FinanceGoals.Domain.Currencies;
 using FinanceGoals.Infrastructure.Currencies;
 using FinanceGoals.Infrastructure.Health;
+using FinanceGoals.Infrastructure.Users;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -22,6 +24,7 @@ public static class InfrastructureServices
     public static IServiceCollection AddInfrastructure(this IServiceCollection services)
     {
         services.AddSingleton<ICurrencyCatalog, SqlCurrencyCatalog>();
+        services.AddSingleton<IAppUserStore, SqlAppUserStore>();
         services.AddSingleton<SqlExchangeRateStore>();
         services.AddSingleton<IExchangeRateStore>(provider => provider.GetRequiredService<SqlExchangeRateStore>());
         services.AddSingleton<IEurRates>(provider => provider.GetRequiredService<SqlExchangeRateStore>());

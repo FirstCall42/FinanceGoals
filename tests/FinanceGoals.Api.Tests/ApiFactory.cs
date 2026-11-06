@@ -1,7 +1,9 @@
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 
 namespace FinanceGoals.Api.Tests;
 
@@ -34,11 +36,22 @@ internal sealed class ApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("ConnectionStrings:App", _connectionString ?? string.Empty);
         // Tests never call the real ECB feed.
         builder.UseSetting(ExchangeRateImportService.EnabledSetting, "false");
+        // Tokens from TestTokens are for this client; a test can override it in its settings.
+        builder.UseSetting(GoogleSignIn.ClientIdSetting, TestTokens.ClientId);
         foreach (var (key, value) in _settings)
         {
             builder.UseSetting(key, value);
         }
 
-        builder.ConfigureTestServices(services => services.AddSingleton(new ApiLogging.Output(Log)));
+        builder.ConfigureTestServices(services =>
+        {
+            services.AddSingleton(new ApiLogging.Output(Log));
+            // Tokens are signed by TestTokens instead of Google, so no test fetches Google's keys.
+            services.PostConfigure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>
+            {
+                options.Configuration = new OpenIdConnectConfiguration { Issuer = GoogleSignIn.Authority };
+                options.TokenValidationParameters.IssuerSigningKey = TestTokens.SigningKey;
+            });
+        });
     }
 }

@@ -19,6 +19,7 @@
   </ItemGroup>
 
   <ItemGroup Label="API">
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.14" />
     <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.14" />
     <!-- Writes the OpenAPI document during the build. -->
     <PackageVersion Include="Microsoft.Extensions.ApiDescription.Server" Version="10.0.14" />

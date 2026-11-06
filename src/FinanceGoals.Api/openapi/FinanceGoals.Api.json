@@ -69,6 +69,48 @@
           }
         }
       }
+    },
+    "/api/auth/config": {
+      "get": {
+        "tags": [
+          "FinanceGoals.Api"
+        ],
+        "summary": "The Google client ID the web app signs in with; null when sign-in is not set up.",
+        "operationId": "GetSignInConfig",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignInConfig"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/me": {
+      "post": {
+        "tags": [
+          "FinanceGoals.Api"
+        ],
+        "summary": "Records the sign-in of the Google account in the bearer token and returns the user.",
+        "operationId": "SignIn",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -509,6 +551,49 @@
           }
         },
         "description": "When a schedule ends and what it costs."
+      },
+      "SignInConfig": {
+        "required": [
+          "googleClientId"
+        ],
+        "type": "object",
+        "properties": {
+          "googleClientId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "What the web app needs to show the Google sign-in button."
+      },
+      "User": {
+        "required": [
+          "id",
+          "email",
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "email": {
+            "type": "string"
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "A person who has signed in, as the app knows them."
       }
     }
   },
