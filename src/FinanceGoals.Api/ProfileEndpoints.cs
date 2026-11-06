@@ -310,6 +310,8 @@ internal static class ProfileEndpoints
             .WithName("DeleteAccountValue")
             .WithSummary("Deletes one account's balance on a date.");
 
+        profile.MapNetWorth();
+
         return profile;
     }
 }

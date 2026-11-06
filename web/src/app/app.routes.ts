@@ -1,6 +1,7 @@
 import { Routes } from '@angular/router';
 import { Home } from './home/home';
 import { Accounts } from './accounts/accounts';
+import { NetWorthPage } from './net-worth/net-worth';
 import { Balances } from './accounts/balances';
 import { LoanCalculator } from './loans/loan-calculator';
 import { InviteAccept } from './profile/invite-accept';
@@ -8,6 +9,7 @@ import { Settings } from './settings/settings';
 
 export const routes: Routes = [
   { path: '', component: Home, title: 'FinanceGoals' },
+  { path: 'net-worth', component: NetWorthPage, title: 'Net worth · FinanceGoals' },
   { path: 'accounts', component: Accounts, title: 'Accounts · FinanceGoals' },
   { path: 'balances', component: Balances, title: 'Balances · FinanceGoals' },
   { path: 'calculator', component: LoanCalculator, title: 'Mortgage calculator · FinanceGoals' },

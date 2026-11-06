@@ -7,7 +7,7 @@ using Microsoft.Extensions.Configuration;
 namespace FinanceGoals.Infrastructure.Currencies;
 
 /// <summary>Rates in app.ExchangeRate, read and written with the API's own connection (the app user).</summary>
-internal sealed class SqlExchangeRateStore : IExchangeRateStore
+internal sealed class SqlExchangeRateStore : IExchangeRateStore, IRateHistory
 {
     // Only currencies the app knows (app.Currency); the ECB list could in theory gain a code first.
     // An unchanged rate is not touched, so a rerun for the same day changes nothing.
@@ -70,6 +70,37 @@ internal sealed class SqlExchangeRateStore : IExchangeRateStore
 
         await using var merge = new SqlCommand(_mergeSql, connection);
         return await merge.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<EurRate>> ListAsync(IReadOnlyCollection<string> currencyCodes, DateOnly upTo, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(currencyCodes);
+        if (currencyCodes.Count == 0)
+        {
+            return [];
+        }
+
+        await using var connection = new SqlConnection(ConnectionString());
+        await connection.OpenAsync(cancellationToken);
+        var names = currencyCodes.Select((_, i) => $"@c{i}").ToArray();
+        await using var command = new SqlCommand(
+            $"SELECT CurrencyCode, RateDate, UnitsPerEur FROM app.ExchangeRate WHERE CurrencyCode IN ({string.Join(", ", names)}) AND RateDate <= @upTo ORDER BY CurrencyCode, RateDate;",
+            connection);
+        var index = 0;
+        foreach (var code in currencyCodes)
+        {
+            command.Parameters.Add(new SqlParameter(names[index++], SqlDbType.Char, 3) { Value = code });
+        }
+
+        command.Parameters.Add(new SqlParameter("@upTo", SqlDbType.Date) { Value = upTo.ToDateTime(TimeOnly.MinValue) });
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        var rates = new List<EurRate>();
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            rates.Add(new EurRate(reader.GetString(0), DateOnly.FromDateTime(reader.GetDateTime(1)), reader.GetDecimal(2)));
+        }
+
+        return rates;
     }
 
     public EurRate? LatestOnOrBefore(string currencyCode, DateOnly day)

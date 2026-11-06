@@ -37,3 +37,7 @@ export type { DeleteSnapshot$Params as DeleteSnapshot$Params } from './fn/financ
 export { deleteSnapshot as deleteSnapshot } from './fn/finance-goals-api/delete-snapshot';
 export type { DeleteAccountValue$Params as DeleteAccountValue$Params } from './fn/finance-goals-api/delete-account-value';
 export { deleteAccountValue as deleteAccountValue } from './fn/finance-goals-api/delete-account-value';
+export type { GetNetWorth$Params as GetNetWorth$Params } from './fn/finance-goals-api/get-net-worth';
+export { getNetWorth as getNetWorth } from './fn/finance-goals-api/get-net-worth';
+export type { GetNetWorthHistory$Params as GetNetWorthHistory$Params } from './fn/finance-goals-api/get-net-worth-history';
+export { getNetWorthHistory as getNetWorthHistory } from './fn/finance-goals-api/get-net-worth-history';

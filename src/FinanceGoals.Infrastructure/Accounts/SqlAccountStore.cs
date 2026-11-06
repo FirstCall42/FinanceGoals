@@ -11,7 +11,7 @@ internal sealed class SqlAccountStore : IAccountStore
     private const int _uniqueConstraintViolation = 2627;
     private const int _uniqueIndexViolation = 2601;
 
-    private const string _columns = "Id, Name, Type, CurrencyCode, CASE WHEN ArchivedAt IS NULL THEN CAST(0 AS bit) ELSE CAST(1 AS bit) END";
+    private const string _columns = "Id, Name, Type, CurrencyCode, CASE WHEN ArchivedAt IS NULL THEN CAST(0 AS bit) ELSE CAST(1 AS bit) END, CAST(ArchivedAt AS date)";
 
     private readonly IConfiguration _configuration;
 
@@ -45,7 +45,7 @@ internal sealed class SqlAccountStore : IAccountStore
         await using var command = new SqlCommand(
             """
             INSERT INTO app.Account (ProfileId, Name, Type, CurrencyCode, CreatedBy, UpdatedBy)
-            OUTPUT inserted.Id, inserted.Name, inserted.Type, inserted.CurrencyCode, CAST(0 AS bit)
+            OUTPUT inserted.Id, inserted.Name, inserted.Type, inserted.CurrencyCode, CAST(0 AS bit), CAST(NULL AS date)
             VALUES (@ProfileId, @Name, @Type, @CurrencyCode, @UserId, @UserId);
             """,
             connection);
@@ -76,7 +76,7 @@ internal sealed class SqlAccountStore : IAccountStore
                AND @Current <> @CurrencyCode
                AND EXISTS (SELECT 1 FROM app.AccountValue WITH (READCOMMITTEDLOCK) WHERE AccountId = @AccountId)
             BEGIN
-                SELECT -1, N'', '', '', CAST(0 AS bit);
+                SELECT -1, N'', '', '', CAST(0 AS bit), CAST(NULL AS date);
                 ROLLBACK TRANSACTION;
             END
             ELSE
@@ -90,7 +90,7 @@ internal sealed class SqlAccountStore : IAccountStore
                                   ELSE ArchivedAt END,
                 UpdatedAt = SYSUTCDATETIME(), UpdatedBy = @UserId
             OUTPUT inserted.Id, inserted.Name, inserted.Type, inserted.CurrencyCode,
-                   CASE WHEN inserted.ArchivedAt IS NULL THEN CAST(0 AS bit) ELSE CAST(1 AS bit) END
+                   CASE WHEN inserted.ArchivedAt IS NULL THEN CAST(0 AS bit) ELSE CAST(1 AS bit) END, CAST(inserted.ArchivedAt AS date)
             WHERE Id = @AccountId AND ProfileId = @ProfileId;
             COMMIT TRANSACTION;
             END;
@@ -126,7 +126,8 @@ internal sealed class SqlAccountStore : IAccountStore
     }
 
     private static Account Read(SqlDataReader reader) =>
-        new(reader.GetInt32(0), reader.GetString(1), Enum.Parse<AccountType>(reader.GetString(2)), reader.GetString(3), reader.GetBoolean(4));
+        new(reader.GetInt32(0), reader.GetString(1), Enum.Parse<AccountType>(reader.GetString(2)), reader.GetString(3), reader.GetBoolean(4),
+            reader.IsDBNull(5) ? null : DateOnly.FromDateTime(reader.GetDateTime(5)));
 
     private async Task<SqlConnection> OpenAsync(CancellationToken cancellationToken)
     {
