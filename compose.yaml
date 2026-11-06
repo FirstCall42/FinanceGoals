@@ -49,12 +49,25 @@ services:
       Migrator__AppUserPassword: ${APP_PASSWORD:-Local_app_Pw1!}
     restart: "no"
 
+  # Local-only sample data (not a DbUp script, so it never reaches the cloud).
+  sample-data:
+    image: mcr.microsoft.com/mssql/server:2022-CU27-ubuntu-22.04
+    depends_on:
+      migrator:
+        condition: service_completed_successfully
+    environment:
+      SA_PASSWORD: ${SA_PASSWORD:-Local_sa_Pw1!}
+    volumes:
+      - ./compose/sample-data.sql:/sample-data.sql:ro
+    entrypoint: ["/bin/sh", "-c", "/opt/mssql-tools18/bin/sqlcmd -C -S sql -U sa -d FinanceGoals -P \"$$SA_PASSWORD\" -b -i /sample-data.sql"]
+    restart: "no"
+
   api:
     build:
       context: .
       dockerfile: src/FinanceGoals.Api/Dockerfile
     depends_on:
-      migrator:
+      sample-data:
         condition: service_completed_successfully
     environment:
       ASPNETCORE_ENVIRONMENT: Development

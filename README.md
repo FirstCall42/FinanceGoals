@@ -110,7 +110,7 @@ docker compose down -v        # stop and delete the local database
 - The web container serves the same build as the cloud, with `compose/config.json` pointing it at the API. Sign-in works locally: the Google client allows `http://localhost:4200`, and you sign in with your own Google account.
 - The passwords in `compose.yaml` are for this local stack only. To use your own, copy `.env.example` to `.env`, which git ignores.
 - `ng serve` and the web container both use port 4200, so stop one before starting the other. For quick web changes, start only the API and what it needs (`docker compose up --build api`) and run `ng serve`, which proxies `/api` to port 5208.
-- There are no accounts or other household data yet. Sample data for them comes with the features that add them (Phase 2).
+- `sample-data` loads `compose/sample-data.sql` after the migrator: a sample user and household. It is a plain script for this local stack, not a migration or seed, so it never reaches the cloud. Features that add tables (accounts, loans) extend that file.
 
 ## Images
 
