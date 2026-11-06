@@ -28,6 +28,9 @@ public enum AccountOutcome
 
     /// <summary>Another account of the household already has the name.</summary>
     NameTaken,
+
+    /// <summary>The account has balances in its currency, so the currency can no longer change.</summary>
+    CurrencyLocked,
 }
 
 /// <summary>The household's accounts (#35). Every method is scoped to one profile.</summary>

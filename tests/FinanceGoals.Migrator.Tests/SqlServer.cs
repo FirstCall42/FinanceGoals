@@ -43,6 +43,9 @@ public static class SqlServer
         var ownerPassword = NewPassword();
 
         await ExecuteAsync(Container.GetConnectionString(), $"CREATE DATABASE [{name}] CONTAINMENT = PARTIAL;");
+        // Azure SQL Database reads row versions by default (READ_COMMITTED_SNAPSHOT is ON there, OFF on a
+        // plain SQL Server), so the tests run the way the cloud does: locking code must not rely on blocking reads.
+        await ExecuteAsync(Container.GetConnectionString(), $"ALTER DATABASE [{name}] SET READ_COMMITTED_SNAPSHOT ON;");
         var database = WithDatabase(Container.GetConnectionString(), name);
         await ExecuteAsync(database, $"""
             CREATE USER schema_owner WITH PASSWORD = '{ownerPassword}';

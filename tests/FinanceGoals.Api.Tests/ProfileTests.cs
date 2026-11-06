@@ -178,8 +178,9 @@ public sealed partial class ProfileTests
         foreach (var endpoint in endpoints)
         {
             var path = endpoint.RoutePattern.RawText!.Replace(_profileGroup, $"/api/profiles/{profileId}", StringComparison.Ordinal);
-            // Any other route parameter gets a plausible id; the membership check comes first anyway.
-            path = RouteParameter().Replace(path, "1");
+            // A date parameter gets a real date and any other one an id, so a request is well-formed and
+            // only the membership check can turn it away.
+            path = RouteParameter().Replace(path, match => match.Value.Contains("date", StringComparison.Ordinal) ? "2026-01-01" : "1");
             foreach (var method in endpoint.Metadata.GetMetadata<IHttpMethodMetadata>()!.HttpMethods)
             {
                 var body = method is "GET" or "DELETE" ? null : new { };

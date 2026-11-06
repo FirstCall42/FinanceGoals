@@ -584,6 +584,203 @@
           }
         }
       }
+    },
+    "/api/profiles/{profileId}/values": {
+      "get": {
+        "tags": [
+          "FinanceGoals.Api"
+        ],
+        "summary": "The household's account balances, newest first; one account's with accountId.",
+        "operationId": "ListAccountValues",
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "query",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            }
+          },
+          {
+            "name": "profileId",
+            "in": "path",
+            "description": "The household profile; the caller must be a member (404 otherwise).",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AccountValue"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/profiles/{profileId}/snapshots": {
+      "post": {
+        "tags": [
+          "FinanceGoals.Api"
+        ],
+        "summary": "Records the balances of several accounts on one date. A balance already recorded for that account and date is replaced; accounts left out are not recorded.",
+        "operationId": "SaveSnapshot",
+        "parameters": [
+          {
+            "name": "profileId",
+            "in": "path",
+            "description": "The household profile; the caller must be a member (404 otherwise).",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveSnapshot"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SnapshotSaved"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/profiles/{profileId}/snapshots/{date}": {
+      "delete": {
+        "tags": [
+          "FinanceGoals.Api"
+        ],
+        "summary": "Deletes every balance recorded on a date.",
+        "operationId": "DeleteSnapshot",
+        "parameters": [
+          {
+            "name": "date",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "profileId",
+            "in": "path",
+            "description": "The household profile; the caller must be a member (404 otherwise).",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/profiles/{profileId}/accounts/{accountId}/values/{date}": {
+      "delete": {
+        "tags": [
+          "FinanceGoals.Api"
+        ],
+        "summary": "Deletes one account's balance on a date.",
+        "operationId": "DeleteAccountValue",
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "date",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "profileId",
+            "in": "path",
+            "description": "The household profile; the caller must be a member (404 otherwise).",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -660,6 +857,37 @@
           "Property"
         ],
         "description": "What kind of account it is. No individual holdings are tracked, only the account's value."
+      },
+      "AccountValue": {
+        "required": [
+          "accountId",
+          "date",
+          "amount"
+        ],
+        "type": "object",
+        "properties": {
+          "accountId": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "amount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "format": "double"
+          }
+        },
+        "description": "An account's balance on a date, in the account's currency."
       },
       "CreateAccount": {
         "type": "object",
@@ -1166,6 +1394,28 @@
         },
         "description": "A rate change: the nominal annual rate in percent (5.24 is 5.24 %) from a date."
       },
+      "SaveSnapshot": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date"
+          },
+          "values": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/SnapshotValue"
+            }
+          }
+        },
+        "description": "Balances of several accounts on one date."
+      },
       "ScheduleRow": {
         "required": [
           "number",
@@ -1333,6 +1583,52 @@
           }
         },
         "description": "What the web app needs to show the Google sign-in button."
+      },
+      "SnapshotSaved": {
+        "required": [
+          "date",
+          "count"
+        ],
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "count": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        },
+        "description": "A saved snapshot: its date and how many balances it holds."
+      },
+      "SnapshotValue": {
+        "type": "object",
+        "properties": {
+          "accountId": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "amount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "format": "double"
+          }
+        },
+        "description": "One account's balance in a snapshot, in the account's own currency."
       },
       "UpdateAccount": {
         "type": "object",

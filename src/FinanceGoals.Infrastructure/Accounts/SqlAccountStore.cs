@@ -63,6 +63,24 @@ internal sealed class SqlAccountStore : IAccountStore
         await using var connection = await OpenAsync(cancellationToken);
         await using var command = new SqlCommand(
             """
+            SET XACT_ABORT ON;
+            BEGIN TRANSACTION;
+            -- Balances carry no currency of their own, so an account with balances keeps its currency.
+            -- The account row is locked first, in a statement of its own, so a balance can't be added
+            -- between the check and the update (a balance save takes the same lock). Balances are then
+            -- read with READCOMMITTEDLOCK: Azure SQL reads row versions by default (RCSI), and a version
+            -- from before the wait for the lock would miss a balance committed during it.
+            DECLARE @Current char(3) = (SELECT CurrencyCode FROM app.Account WITH (UPDLOCK) WHERE Id = @AccountId AND ProfileId = @ProfileId);
+            IF @CurrencyCode IS NOT NULL
+               AND @Current IS NOT NULL
+               AND @Current <> @CurrencyCode
+               AND EXISTS (SELECT 1 FROM app.AccountValue WITH (READCOMMITTEDLOCK) WHERE AccountId = @AccountId)
+            BEGIN
+                SELECT -1, N'', '', '', CAST(0 AS bit);
+                ROLLBACK TRANSACTION;
+            END
+            ELSE
+            BEGIN
             UPDATE app.Account
             SET Name = COALESCE(@Name, Name),
                 Type = COALESCE(@Type, Type),
@@ -74,6 +92,8 @@ internal sealed class SqlAccountStore : IAccountStore
             OUTPUT inserted.Id, inserted.Name, inserted.Type, inserted.CurrencyCode,
                    CASE WHEN inserted.ArchivedAt IS NULL THEN CAST(0 AS bit) ELSE CAST(1 AS bit) END
             WHERE Id = @AccountId AND ProfileId = @ProfileId;
+            COMMIT TRANSACTION;
+            END;
             """,
             connection);
         command.Parameters.Add(new SqlParameter("@AccountId", SqlDbType.Int) { Value = accountId });
@@ -91,7 +111,13 @@ internal sealed class SqlAccountStore : IAccountStore
         try
         {
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-            return await reader.ReadAsync(cancellationToken) ? (AccountOutcome.Saved, Read(reader)) : (AccountOutcome.NotFound, null);
+            if (!await reader.ReadAsync(cancellationToken))
+            {
+                return (AccountOutcome.NotFound, null);
+            }
+
+            // -1 is the update's way of saying the currency is locked by existing balances.
+            return reader.GetInt32(0) == -1 ? (AccountOutcome.CurrencyLocked, null) : (AccountOutcome.Saved, Read(reader));
         }
         catch (SqlException exception) when (exception.Number is _uniqueConstraintViolation or _uniqueIndexViolation)
         {

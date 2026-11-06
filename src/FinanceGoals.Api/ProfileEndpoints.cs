@@ -26,6 +26,66 @@ internal static class ProfileEndpoints
     public static ProfileAccess Access(this HttpContext context) =>
         context.Items[_accessKey] as ProfileAccess ?? throw new InvalidOperationException("The profile filter did not run.");
 
+    private const int _maxSnapshotValues = 200;
+    private const decimal _maxAmount = 10_000_000_000_000m;
+    private static readonly DateOnly _earliestSnapshot = new(1990, 1, 1);
+
+    /// <summary>
+    /// Checks a snapshot before anything is saved: a date that isn't in the future, accounts that are
+    /// the household's, no account twice, and amounts that are whole minor units (øre, cents) of the
+    /// account's own currency, because an amount has no currency of its own.
+    /// </summary>
+    private static async Task<(Dictionary<string, string[]> Errors, Dictionary<int, string> AccountCurrency)> ValidateSnapshotAsync(
+        SaveSnapshot request, int profileId, IAccountStore accounts, ICurrencyCatalog currencies, TimeProvider clock, CancellationToken cancellationToken)
+    {
+        var errors = new Dictionary<string, string[]>();
+        var accountCurrency = new Dictionary<int, string>();
+        // A day ahead of UTC, so a date that is "today" anywhere on Earth is accepted.
+        var latest = DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime).AddDays(1);
+        if (request.Date is not { } date || date < _earliestSnapshot || date > latest)
+        {
+            errors["date"] = [$"The date must be between {_earliestSnapshot:yyyy-MM-dd} and today."];
+        }
+
+        if (request.Values is not { Count: > 0 and <= _maxSnapshotValues } values)
+        {
+            errors["values"] = [$"Record the balance of at least one account, and at most {_maxSnapshotValues}."];
+            return (errors, accountCurrency);
+        }
+
+        if (values.Any(v => v.AccountId is null || v.Amount is null) || values.Select(v => v.AccountId).Distinct().Count() != values.Count)
+        {
+            errors["values"] = ["Each balance needs an account and an amount, and an account can appear once."];
+            return (errors, accountCurrency);
+        }
+
+        accountCurrency = (await accounts.ListAsync(profileId, includeArchived: true, cancellationToken)).ToDictionary(a => a.Id, a => a.CurrencyCode);
+        var minorUnits = (await currencies.ListAsync(cancellationToken)).ToDictionary(c => c.Code, c => (int)c.MinorUnits);
+        var problems = new List<string>();
+        foreach (var value in values)
+        {
+            if (!accountCurrency.TryGetValue(value.AccountId!.Value, out var code))
+            {
+                problems.Add("A balance is for an account that is not in this household.");
+                continue;
+            }
+
+            var currency = new FinanceGoals.Domain.Currencies.Currency(code, minorUnits[code]);
+            var amount = new FinanceGoals.Domain.Currencies.Money(value.Amount!.Value, currency);
+            if (Math.Abs(amount.Amount) > _maxAmount || amount.Round() != amount)
+            {
+                problems.Add($"A balance in {code} must be a whole number of {(minorUnits[code] == 0 ? "units" : "minor units (øre, cents)")} and at most 10 000 000 000 000.");
+            }
+        }
+
+        if (problems.Count > 0)
+        {
+            errors["values"] = [.. problems.Distinct()];
+        }
+
+        return (errors, accountCurrency);
+    }
+
     public static RouteGroupBuilder MapProfiles(this IEndpointRouteBuilder app)
     {
         var profile = app.MapGroup("/api/profiles/{profileId:int}");
@@ -206,12 +266,49 @@ internal static class ProfileEndpoints
                 return outcome switch
                 {
                     AccountOutcome.NotFound => TypedResults.NotFound(),
+                    AccountOutcome.CurrencyLocked => TypedResults.Conflict(new ProblemDetails { Title = "This account has balances in its currency, so the currency can no longer change. Archive it and add a new account in the other currency.", Status = StatusCodes.Status409Conflict }),
                     AccountOutcome.NameTaken => TypedResults.Conflict(new ProblemDetails { Title = "An account with that name already exists.", Status = StatusCodes.Status409Conflict }),
                     _ => TypedResults.Ok(account!),
                 };
             })
             .WithName("UpdateAccount")
             .WithSummary("Changes an account: name, type, currency, or archive and restore it.");
+
+        profile.MapGet("/values", async (int? accountId, HttpContext http, IAccountValueStore values, CancellationToken cancellationToken) =>
+                TypedResults.Ok(await values.ListAsync(http.Access().ProfileId, accountId, cancellationToken)))
+            .WithName("ListAccountValues")
+            .WithSummary("The household's account balances, newest first; one account's with accountId.");
+
+        profile.MapPost("/snapshots", async Task<Results<Ok<SnapshotSaved>, ValidationProblem, Conflict<ProblemDetails>>> (SaveSnapshot request, HttpContext http, IAccountStore accounts, IAccountValueStore values, ICurrencyCatalog currencies, TimeProvider clock, CancellationToken cancellationToken) =>
+            {
+                var access = http.Access();
+                var (errors, accountCurrency) = await ValidateSnapshotAsync(request, access.ProfileId, accounts, currencies, clock, cancellationToken);
+                if (errors.Count > 0)
+                {
+                    return TypedResults.ValidationProblem(errors);
+                }
+
+                var outcome = await values.SaveAsync(
+                    access.ProfileId, request.Date!.Value, [.. request.Values!.Select(v => (v.AccountId!.Value, v.Amount!.Value, accountCurrency[v.AccountId.Value]))], access.UserId, cancellationToken);
+                return outcome switch
+                {
+                    ValueOutcome.Saved => TypedResults.Ok(new SnapshotSaved(request.Date.Value, request.Values!.Count)),
+                    ValueOutcome.CurrencyChanged => TypedResults.Conflict(new ProblemDetails { Title = "An account's currency changed while you were saving. Reload the page and enter the balances again.", Status = StatusCodes.Status409Conflict }),
+                    _ => TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["values"] = ["A balance is for an account that is not in this household."] }),
+                };
+            })
+            .WithName("SaveSnapshot")
+            .WithSummary("Records the balances of several accounts on one date. A balance already recorded for that account and date is replaced; accounts left out are not recorded.");
+
+        profile.MapDelete("/snapshots/{date}", async Task<Results<NoContent, NotFound>> (DateOnly date, HttpContext http, IAccountValueStore values, CancellationToken cancellationToken) =>
+                await values.DeleteSnapshotAsync(http.Access().ProfileId, date, cancellationToken) > 0 ? TypedResults.NoContent() : TypedResults.NotFound())
+            .WithName("DeleteSnapshot")
+            .WithSummary("Deletes every balance recorded on a date.");
+
+        profile.MapDelete("/accounts/{accountId:int}/values/{date}", async Task<Results<NoContent, NotFound>> (int accountId, DateOnly date, HttpContext http, IAccountValueStore values, CancellationToken cancellationToken) =>
+                await values.DeleteAsync(http.Access().ProfileId, accountId, date, cancellationToken) ? TypedResults.NoContent() : TypedResults.NotFound())
+            .WithName("DeleteAccountValue")
+            .WithSummary("Deletes one account's balance on a date.");
 
         return profile;
     }
@@ -234,3 +331,12 @@ internal sealed record CreateAccount(string? Name = null, AccountType? Type = nu
 
 /// <summary>Changes to an account; a missing field stays as it is. Archived true archives it, false restores it.</summary>
 internal sealed record UpdateAccount(string? Name = null, AccountType? Type = null, string? CurrencyCode = null, bool? Archived = null);
+
+/// <summary>One account's balance in a snapshot, in the account's own currency.</summary>
+internal sealed record SnapshotValue(int? AccountId = null, decimal? Amount = null);
+
+/// <summary>Balances of several accounts on one date.</summary>
+internal sealed record SaveSnapshot(DateOnly? Date = null, IReadOnlyList<SnapshotValue>? Values = null);
+
+/// <summary>A saved snapshot: its date and how many balances it holds.</summary>
+internal sealed record SnapshotSaved(DateOnly Date, int Count);
