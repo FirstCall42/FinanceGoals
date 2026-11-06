@@ -173,6 +173,25 @@
     }
   </form>
 
+  @if (profile()) {
+    <section class="panel" aria-labelledby="saved-title">
+      <h2 id="saved-title">Saved loans</h2>
+      @for (loan of savedLoans(); track loan.id) {
+        <button type="button" class="secondary" (click)="open(loan)">Open {{ loan.name }}</button>
+      } @empty {
+        <p>No saved loans yet.</p>
+      }
+      <label class="field">
+        <span>Name</span>
+        <input type="text" [value]="loanName()" (input)="loanName.set(text($event))" />
+      </label>
+      <button type="button" (click)="save()">Save this loan</button>
+      @if (notice(); as message) {
+        <p role="status">{{ message }}</p>
+      }
+    </section>
+  }
+
   @if (result(); as r) {
     <section class="tiles" aria-label="Summary">
       <div class="tile">
@@ -204,6 +223,15 @@
           >
         </div>
       }
+    </section>
+
+    <section class="panel" aria-labelledby="payoff-title">
+      <h2 id="payoff-title">What is left to pay</h2>
+      <app-payoff-chart
+        [standard]="r.withoutExtraSchedule"
+        [withExtras]="r.withExtraSchedule"
+        [currency]="r.currency"
+      />
     </section>
 
     <section class="panel" aria-labelledby="schedule-title">
