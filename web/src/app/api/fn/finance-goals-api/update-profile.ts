@@ -7,14 +7,14 @@ import { filter, map } from 'rxjs/operators';
 import { StrictHttpResponse } from '../../strict-http-response';
 import { RequestBuilder } from '../../request-builder';
 
-import { RenameProfile } from '../../models/rename-profile';
+import { UpdateProfile } from '../../models/update-profile';
 
-export interface RenameProfile$Params {
-      body: RenameProfile
+export interface UpdateProfile$Params {
+      body: UpdateProfile
 }
 
-export function renameProfile(http: HttpClient, rootUrl: string, params: RenameProfile$Params, context?: HttpContext): Observable<StrictHttpResponse<void>> {
-  const rb = new RequestBuilder(rootUrl, renameProfile.PATH, 'patch');
+export function updateProfile(http: HttpClient, rootUrl: string, params: UpdateProfile$Params, context?: HttpContext): Observable<StrictHttpResponse<void>> {
+  const rb = new RequestBuilder(rootUrl, updateProfile.PATH, 'patch');
   if (params) {
     rb.body(params.body, 'application/json');
   }
@@ -29,4 +29,4 @@ export function renameProfile(http: HttpClient, rootUrl: string, params: RenameP
   );
 }
 
-renameProfile.PATH = '/api/profiles/{profileId}';
+updateProfile.PATH = '/api/profiles/{profileId}';

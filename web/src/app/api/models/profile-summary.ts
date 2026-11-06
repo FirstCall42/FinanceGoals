@@ -8,6 +8,7 @@ import { ProfileRole } from '../models/profile-role';
  */
 export interface ProfileSummary {
   id: (number | string);
+  mainCurrency: string;
   name: string;
   role: ProfileRole;
 }

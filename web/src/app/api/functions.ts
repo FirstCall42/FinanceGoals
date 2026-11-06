@@ -13,8 +13,8 @@ export type { AcceptInvite$Params as AcceptInvite$Params } from './fn/finance-go
 export { acceptInvite as acceptInvite } from './fn/finance-goals-api/accept-invite';
 export type { GetProfile$Params as GetProfile$Params } from './fn/finance-goals-api/get-profile';
 export { getProfile as getProfile } from './fn/finance-goals-api/get-profile';
-export type { RenameProfile$Params as RenameProfile$Params } from './fn/finance-goals-api/rename-profile';
-export { renameProfile as renameProfile } from './fn/finance-goals-api/rename-profile';
+export type { UpdateProfile$Params as UpdateProfile$Params } from './fn/finance-goals-api/update-profile';
+export { updateProfile as updateProfile } from './fn/finance-goals-api/update-profile';
 export type { ListProfileMembers$Params as ListProfileMembers$Params } from './fn/finance-goals-api/list-profile-members';
 export { listProfileMembers as listProfileMembers } from './fn/finance-goals-api/list-profile-members';
 export type { ListInvites$Params as ListInvites$Params } from './fn/finance-goals-api/list-invites';

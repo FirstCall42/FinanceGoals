@@ -1013,10 +1013,6 @@
         "description": "What the web app needs to show the Google sign-in button."
       },
       "UpdateProfile": {
-        "required": [
-          "name",
-          "mainCurrency"
-        ],
         "type": "object",
         "properties": {
           "name": {

@@ -131,7 +131,7 @@ internal static class ProfileEndpoints
 }
 
 /// <summary>New settings for a profile; a null one stays as it is.</summary>
-internal sealed record UpdateProfile(string? Name, string? MainCurrency);
+internal sealed record UpdateProfile(string? Name = null, string? MainCurrency = null);
 
 /// <summary>Whom to invite: the email address of their Google account.</summary>
 internal sealed record InviteMember(string? Email = null);
