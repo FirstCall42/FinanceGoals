@@ -11,7 +11,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "api:generate": "ng-openapi-gen",
-    "api:check": "node scripts/check-api-client.mjs"
+    "api:check": "node scripts/check-api-client.mjs",
+    "e2e": "playwright test"
   },
   "private": true,
   "packageManager": "npm@11.20.0",
@@ -30,6 +31,8 @@
     "@angular/cli": "^22.2.6",
     "@angular/compiler-cli": "^22.2.0",
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "1.65.0",
+    "@types/node": "^24.19.2",
     "angular-eslint": "22.6.0",
     "eslint": "^10.12.0",
     "jsdom": "^30.0.0",
