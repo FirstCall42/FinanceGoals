@@ -21,7 +21,7 @@ internal static class NetWorthEndpoints
                 var day = date ?? Today(clock);
                 if (day < _earliest || day > Today(clock).AddDays(1))
                 {
-                    return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["date"] = [$"The date must be between {_earliest:yyyy-MM-dd} and today."] });
+                    return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["date"] = [$"The date must be between {_earliest:yyyy-MM-dd} and tomorrow."] });
                 }
 
                 var context = await LoadAsync(currency, day, http, profiles, accounts, values, currencies, rates, cancellationToken);
@@ -42,7 +42,7 @@ internal static class NetWorthEndpoints
                 var end = to ?? Today(clock);
                 if (end < _earliest || end > Today(clock).AddDays(1))
                 {
-                    return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["to"] = [$"The date must be between {_earliest:yyyy-MM-dd} and today."] });
+                    return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["to"] = [$"The date must be between {_earliest:yyyy-MM-dd} and tomorrow."] });
                 }
 
                 var context = await LoadAsync(currency, end, http, profiles, accounts, values, currencies, rates, cancellationToken);

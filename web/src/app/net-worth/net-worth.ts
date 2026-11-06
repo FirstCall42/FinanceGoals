@@ -269,7 +269,9 @@ export class NetWorthPage {
 
   private requests = 0;
 
-  protected readonly units = computed(() => this.minorUnits(this.display.current()));
+  protected readonly units = computed(() =>
+    this.minorUnits(this.current()?.currency ?? this.display.current()),
+  );
 
   constructor() {
     void this.currencies.load();
