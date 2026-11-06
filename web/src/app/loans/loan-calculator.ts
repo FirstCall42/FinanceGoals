@@ -9,6 +9,7 @@ import {
   ScheduleRow,
 } from './loan-calculator.service';
 import { SavedLoan, SavedLoanService } from './saved-loan.service';
+import { PayoffChart } from './payoff-chart';
 import { LoanInput, defaultInput, formatMonths, isoDate, toRequest } from './loan-input';
 
 const storageKey = 'financegoals.loanCalculator';
@@ -29,7 +30,7 @@ interface ScheduleYear {
  */
 @Component({
   selector: 'app-loan-calculator',
-  imports: [MoneyPipe],
+  imports: [MoneyPipe, PayoffChart],
   templateUrl: './loan-calculator.html',
   styleUrl: './loan-calculator.scss',
 })

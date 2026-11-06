@@ -225,6 +225,15 @@
       }
     </section>
 
+    <section class="panel" aria-labelledby="payoff-title">
+      <h2 id="payoff-title">What is left to pay</h2>
+      <app-payoff-chart
+        [standard]="r.withoutExtraSchedule"
+        [withExtras]="r.withExtraSchedule"
+        [currency]="r.currency"
+      />
+    </section>
+
     <section class="panel" aria-labelledby="schedule-title">
       <div class="schedule-head">
         <h2 id="schedule-title">Payment schedule</h2>
