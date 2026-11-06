@@ -14,15 +14,26 @@ public abstract record Conversion
     /// </summary>
     public sealed record Converted : Conversion
     {
-        public Converted(Money amount, DateOnly? rateDate)
+        public Converted(Money amount, DateOnly? rateDate, DateOnly requestedDate)
         {
             Amount = amount;
             RateDate = rateDate;
+            IsStale = rateDate is { } used && used.AddDays(CurrencyConverter.StaleAfterDays) < requestedDate;
         }
 
         public Money Amount { get; }
 
         public DateOnly? RateDate { get; }
+
+        /// <summary>
+        /// The rate used is more than <see cref="CurrencyConverter.StaleAfterDays"/> days older than the
+        /// requested date (rates are imported weekly, #100), so an import was probably missed.
+        /// </summary>
+        public bool IsStale { get; }
+
+        public string? Warning => IsStale
+            ? $"The exchange rate is from {RateDate:yyyy-MM-dd}, more than {CurrencyConverter.StaleAfterDays} days old."
+            : null;
     }
 
     /// <summary>
@@ -51,6 +62,9 @@ public abstract record Conversion
 /// </summary>
 public sealed class CurrencyConverter
 {
+    /// <summary>A rate older than this many days before the requested date is flagged (owner decision, #98).</summary>
+    public const int StaleAfterDays = 8;
+
     private const string _eur = "EUR";
 
     private readonly IEurRates _rates;
@@ -64,7 +78,7 @@ public sealed class CurrencyConverter
     {
         if (amount.Currency == target)
         {
-            return new Conversion.Converted(amount, rateDate: null);
+            return new Conversion.Converted(amount, rateDate: null, date);
         }
 
         if (amount.Currency.Code == target.Code)
@@ -86,7 +100,7 @@ public sealed class CurrencyConverter
         var (fromRate, fromDate) = from.Value;
         var (toRate, toDate) = to.Value;
         var converted = amount.Amount / fromRate * toRate;
-        return new Conversion.Converted(new Money(converted, target), Oldest(fromDate, toDate));
+        return new Conversion.Converted(new Money(converted, target), Oldest(fromDate, toDate), date);
     }
 
     /// <summary>

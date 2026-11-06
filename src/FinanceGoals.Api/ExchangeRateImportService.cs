@@ -32,14 +32,15 @@ internal sealed class ExchangeRateImportTrigger
 
 /// <summary>
 /// Imports the ECB rates when the app is in use: after an API request signals, it imports if the
-/// last successful import is more than 6 hours old (30 minutes after a failure). The 90-day feed
+/// last successful import is more than 7 days old (30 minutes after a failure). The 90-day feed
 /// fills any days that were missed. Turned off with ExchangeRates:ImportEnabled=false (the tests do).
 /// </summary>
 internal sealed partial class ExchangeRateImportService : BackgroundService
 {
     public const string EnabledSetting = "ExchangeRates:ImportEnabled";
 
-    internal static readonly TimeSpan AfterSuccess = TimeSpan.FromHours(6);
+    // Weekly for now (owner decision, #100).
+    internal static readonly TimeSpan AfterSuccess = TimeSpan.FromDays(7);
     internal static readonly TimeSpan AfterFailure = TimeSpan.FromMinutes(30);
 
     private readonly IServiceProvider _services;

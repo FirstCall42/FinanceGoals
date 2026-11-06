@@ -29,7 +29,7 @@ public sealed class ExchangeRateImportServiceTests
     }
 
     [TestMethod]
-    public async Task A_successful_import_waits_six_hours_before_the_next()
+    public async Task A_successful_import_waits_a_week_before_the_next()
     {
         _source.FetchAsync(Arg.Any<CancellationToken>()).Returns([new EurRate("NOK", new DateOnly(2026, 11, 5), 11.68m)]);
         var service = Service();
