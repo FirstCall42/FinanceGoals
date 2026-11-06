@@ -36,6 +36,7 @@ public static class InfrastructureServices
         services.AddSingleton<IAccountStore, SqlAccountStore>();
         services.AddSingleton<IAccountValueStore, SqlAccountValueStore>();
         services.AddSingleton<ILoanStore, SqlLoanStore>();
+        services.AddSingleton<ILoanExtraStore, SqlLoanExtraStore>();
         services.AddSingleton<SqlExchangeRateStore>();
         services.AddSingleton<IExchangeRateStore>(provider => provider.GetRequiredService<SqlExchangeRateStore>());
         services.AddSingleton<IEurRates>(provider => provider.GetRequiredService<SqlExchangeRateStore>());
