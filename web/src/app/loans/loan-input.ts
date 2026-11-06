@@ -27,8 +27,10 @@ export function parseNumber(text: string): number {
 
 /** A starting point with round figures; the person replaces them with their own loan. */
 export function defaultInput(today: Date): LoanInput {
-  const paidOut = isoDate(today);
-  const first = new Date(Date.UTC(today.getFullYear(), today.getMonth() + 1, today.getDate()));
+  // Day 28 at the latest, so the next month has the same day and the first period is a whole month.
+  const day = Math.min(today.getDate(), 28);
+  const paidOut = isoDate(new Date(today.getFullYear(), today.getMonth(), day));
+  const first = new Date(Date.UTC(today.getFullYear(), today.getMonth() + 1, day));
   return {
     currency: 'NOK',
     principal: '3 000 000',
@@ -132,7 +134,8 @@ export function formatMonths(months: number): string {
   return parts.join(' ');
 }
 
-function isoDate(date: Date): string {
+/** A local date as yyyy-mm-dd. */
+export function isoDate(date: Date): string {
   return new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
     .toISOString()
     .slice(0, 10);

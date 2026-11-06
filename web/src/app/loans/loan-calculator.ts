@@ -6,7 +6,7 @@ import {
   LoanCalculatorService,
   ScheduleRow,
 } from './loan-calculator.service';
-import { LoanInput, defaultInput, formatMonths, toRequest } from './loan-input';
+import { LoanInput, defaultInput, formatMonths, isoDate, toRequest } from './loan-input';
 
 const storageKey = 'financegoals.loanCalculator';
 
@@ -50,7 +50,7 @@ export class LoanCalculator {
 
   /** The payment due next: the first one from today on, in the schedule with extras. */
   protected readonly nextPayment = computed(() => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = isoDate(new Date());
     return this.result()?.withExtraSchedule.find((row) => row.date >= today);
   });
 
@@ -70,9 +70,9 @@ export class LoanCalculator {
     return [...byYear].map(([year, list]) => ({
       year,
       rows: list,
-      payments: sum(list, (r) => r.payment),
-      interest: sum(list, (r) => r.interest),
-      extra: sum(list, (r) => r.extra),
+      payments: sum(list, (r) => r.payment, this.minorUnits()),
+      interest: sum(list, (r) => r.interest, this.minorUnits()),
+      extra: sum(list, (r) => r.extra, this.minorUnits()),
       balance: list[list.length - 1].balance,
     }));
   });
@@ -160,16 +160,16 @@ export class LoanCalculator {
     }
   }
 
-  protected monthYear(isoDate: string): string {
-    return new Date(`${isoDate}T00:00:00Z`).toLocaleDateString('en-GB', {
+  protected monthYear(value: string): string {
+    return new Date(`${value}T00:00:00Z`).toLocaleDateString('en-GB', {
       month: 'short',
       year: 'numeric',
       timeZone: 'UTC',
     });
   }
 
-  protected date(isoDate: string): string {
-    return new Date(`${isoDate}T00:00:00Z`).toLocaleDateString('nb-NO', { timeZone: 'UTC' });
+  protected date(value: string): string {
+    return new Date(`${value}T00:00:00Z`).toLocaleDateString('nb-NO', { timeZone: 'UTC' });
   }
 
   protected percent(value: number): string {
@@ -177,9 +177,14 @@ export class LoanCalculator {
   }
 }
 
-function sum(rows: readonly ScheduleRow[], pick: (row: ScheduleRow) => number): number {
-  // Whole øre (cents) so float sums of many rows don't drift.
-  return rows.reduce((total, row) => total + Math.round(pick(row) * 100), 0) / 100;
+function sum(
+  rows: readonly ScheduleRow[],
+  pick: (row: ScheduleRow) => number,
+  minorUnits: number,
+): number {
+  // In whole minor units (øre, cents) so float sums of many rows don't drift.
+  const scale = 10 ** minorUnits;
+  return rows.reduce((total, row) => total + Math.round(pick(row) * scale), 0) / scale;
 }
 
 function loadInput(): LoanInput {

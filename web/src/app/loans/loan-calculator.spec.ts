@@ -61,7 +61,7 @@ describe('Loan calculator input', () => {
       input({
         principal: '5 150 000',
         startRate: '6,04',
-        rateChanges: [{ from: '2025-04-01', rate: '5,65' }],
+        rateChanges: [{ from: '2026-04-01', rate: '5,65' }],
         extras: [{ date: '2026-06-01', amount: '100 000' }],
         monthlyAmount: '5 000',
         monthlyFrom: '2026-12-01',
@@ -78,7 +78,7 @@ describe('Loan calculator input', () => {
       termMonths: 360,
       startRatePercent: 6.04,
       feePerPayment: 0,
-      rateChanges: [{ from: '2025-04-01', annualRatePercent: 5.65 }],
+      rateChanges: [{ from: '2026-04-01', annualRatePercent: 5.65 }],
       extras: [{ date: '2026-06-01', amount: 100_000 }],
       monthlyExtras: [{ amount: 5_000, from: '2026-12-01', until: null }],
     });

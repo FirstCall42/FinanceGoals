@@ -60,6 +60,9 @@ public static class LoanCalculator
 {
     public const int MaxTermMonths = 600;
     public const int MaxEntries = 600;
+    public const decimal MaxRatePercent = 100m;
+    public const decimal MaxAmount = 1_000_000_000_000m;
+    public const int MaxMonthsBeforeFirstPayment = 3;
 
     /// <summary>The result, or null with an error a person can act on when the input is not a valid loan.</summary>
     public static LoanCalculationResult? Calculate(LoanCalculationRequest request, out string? error)
@@ -80,11 +83,44 @@ public static class LoanCalculator
             return null;
         }
 
+        if (rateChanges.Any(change => change is null) || extras.Any(extra => extra is null) || monthly.Any(extra => extra is null))
+        {
+            error = "A rate change or extra payment is empty.";
+            return null;
+        }
+
+        if (new[] { request.StartRatePercent }.Concat(rateChanges.Select(change => change.AnnualRatePercent)).Any(rate => rate is < 0 or > MaxRatePercent))
+        {
+            error = $"Rates must be between 0 and {MaxRatePercent} %.";
+            return null;
+        }
+
+        if (new[] { request.Principal, request.FeePerPayment }
+            .Concat(extras.Select(extra => extra.Amount))
+            .Concat(monthly.Select(extra => extra.Amount))
+            .Any(amount => Math.Abs(amount) > MaxAmount))
+        {
+            error = "Amounts must be at most 1 000 000 000 000.";
+            return null;
+        }
+
+        var paidOut = request.PaidOut ?? request.FirstPayment.AddMonths(-1);
+        if (paidOut < request.FirstPayment.AddMonths(-MaxMonthsBeforeFirstPayment))
+        {
+            error = $"The loan must be paid out at most {MaxMonthsBeforeFirstPayment} months before the first payment.";
+            return null;
+        }
+
         try
         {
             var currency = new Currency(request.Currency, request.MinorUnits);
             Money Amount(decimal amount) => new(amount, currency);
-            var paidOut = request.PaidOut ?? request.FirstPayment.AddMonths(-1);
+            if (Amount(request.Principal).Round().Amount != request.Principal || Amount(request.FeePerPayment).Round().Amount != request.FeePerPayment)
+            {
+                error = "The amount and the fee are whole numbers of minor units (øre, cents).";
+                return null;
+            }
+
             RateChange[] rates =
             [
                 new RateChange(paidOut, request.StartRatePercent / 100m),
@@ -125,6 +161,12 @@ public static class LoanCalculator
         {
             // The domain's messages describe the input ("The principal must be positive."), not the code.
             error = FirstSentence(exception.Message);
+            return null;
+        }
+        catch (OverflowException)
+        {
+            // Within the bounds above, only extreme combinations (e.g. 100 % over 50 years) get here.
+            error = "The figures are too large to calculate; check the rates and the term.";
             return null;
         }
     }
