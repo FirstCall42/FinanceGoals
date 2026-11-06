@@ -42,7 +42,8 @@ public sealed record PayoffComparison(PayoffSummary WithoutExtra, PayoffSummary 
 /// - an annuity payment is recalculated over the remaining term whenever the rate changes, like
 ///   Excel's PMT;
 /// - an extra payment is paid with the regular payment on or after its date and keeps the payment:
-///   the remaining term shrinks (NPER at the current rate, rounded up to whole months);
+///   the remaining term shrinks (NPER at the current rate, rounded up to whole months). Interest-only
+///   months push that shortened end back; an extra during interest-only lowers the later annuity instead;
 /// - amounts are rounded to the currency's minor units; the last payment clears the balance, so the
 ///   principal and extra payments always sum exactly to the loan.
 /// </summary>
@@ -60,11 +61,14 @@ public static class LoanSchedule
         decimal? annuityRate = null;
         decimal annuityPayment = 0;
         var previous = loan.Start;
-        // Payments left, this one included: the contract term until an extra payment shortens it.
-        var remaining = loan.TermMonths;
+        // Repayment months left on the term extra payments have shortened, this one included. Only
+        // annuity months count, so an interest-only period pushes the shortened end back.
+        var repaymentMonthsLeft = loan.TermMonths;
 
-        for (var number = 1; balance > 0 && number <= loan.TermMonths; number++, remaining--)
+        for (var number = 1; balance > 0 && number <= loan.TermMonths; number++)
         {
+            var contractLeft = loan.TermMonths - number + 1;
+            var remaining = Math.Min(contractLeft, repaymentMonthsLeft);
             var date = loan.FirstPaymentDate.AddMonths(number - 1);
             var accrualStart = number == 1 ? loan.Start : previous.AddDays(1);
             var period = loan.PeriodOn(accrualStart);
@@ -98,7 +102,9 @@ public static class LoanSchedule
                     throw new NotSupportedException($"{period.RepaymentType} schedules come with #42.");
             }
 
-            if (remaining == 1 || principal > balance)
+            // The contract end clears the loan in any period; a shortened end only in a repayment month.
+            var isAnnuity = period.RepaymentType == RepaymentType.Annuity;
+            if (contractLeft == 1 || (isAnnuity && remaining == 1) || principal > balance)
             {
                 principal = balance;
             }
@@ -107,10 +113,15 @@ public static class LoanSchedule
             balance -= principal;
             var extra = Math.Min(extras.On(previous, date, currency).Amount, balance);
             balance -= extra;
-            if (extra > 0 && balance > 0 && period.RepaymentType == RepaymentType.Annuity)
+            if (extra > 0 && balance > 0 && isAnnuity)
             {
                 // Keep the payment, shorten the term: the months the payment needs to clear what is left.
-                remaining = Math.Min(remaining, PaymentsToRepay(balance, rate / 12m, annuityPayment, currency.MinorUnits) + 1);
+                repaymentMonthsLeft = Math.Min(remaining, PaymentsToRepay(balance, rate / 12m, annuityPayment, currency.MinorUnits) + 1);
+            }
+
+            if (isAnnuity)
+            {
+                repaymentMonthsLeft--;
             }
 
             installments.Add(new Installment(

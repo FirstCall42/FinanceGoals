@@ -66,6 +66,29 @@ public sealed class ExtraPaymentTests
     }
 
     [TestMethod]
+    public void An_interest_only_period_after_an_extra_pushes_the_shortened_end_back()
+    {
+        var interestOnly = new DateOnly(2030, 1, 1);
+        var annuityAgain = new DateOnly(2035, 1, 1);
+        var loan = new Loan("Mortgage", Nok(1_000_000m), _firstPayment, 300,
+        [
+            new LoanPeriod(_start, RateType.Variable, RepaymentType.Annuity, [new RateChange(_start, 0.05m)]),
+            new LoanPeriod(interestOnly, RateType.Variable, RepaymentType.InterestOnly, [new RateChange(interestOnly, 0.05m)]),
+            new LoanPeriod(annuityAgain, RateType.Variable, RepaymentType.Annuity, [new RateChange(annuityAgain, 0.05m)]),
+        ]);
+
+        var schedule = LoanSchedule.Calculate(loan, OneOff(new ExtraPayment(new DateOnly(2026, 3, 1), Nok(500_000m))));
+
+        // No balloon in the interest-only years; afterwards the same payment resumes over the months
+        // the extra left (NPER rounded up, so slightly below 5 845,90): the pause moves the end back 60 months.
+        schedule.Where(i => i.Date > interestOnly && i.Date <= annuityAgain).ShouldAllBe(i => i.Principal.Amount == 0m);
+        schedule.Where(i => i.Date > annuityAgain).SkipLast(1).ShouldAllBe(i => i.Payment.Amount == 5_766.74m);
+        var withoutPause = LoanSchedule.Calculate(Annuity(1_000_000m, 0.05m, 300), OneOff(new ExtraPayment(new DateOnly(2026, 3, 1), Nok(500_000m))));
+        schedule.Count.ShouldBe(withoutPause.Count + 60);
+        schedule[^1].Balance.Amount.ShouldBe(0m);
+    }
+
+    [TestMethod]
     public void A_monthly_extra_runs_from_its_start_to_its_end()
     {
         var monthly = new MonthlyExtraPayment(Nok(2_000m), new DateOnly(2026, 4, 1), new DateOnly(2026, 12, 31));
