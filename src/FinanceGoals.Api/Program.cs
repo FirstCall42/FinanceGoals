@@ -1,7 +1,9 @@
 using FinanceGoals.Api;
 using FinanceGoals.Application.Currencies;
+using FinanceGoals.Application.Loans;
 using FinanceGoals.Infrastructure;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.Http.HttpResults;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -74,5 +76,12 @@ app.MapGet("/api/currencies", async (ICurrencyCatalog catalog, CancellationToken
         TypedResults.Ok(await catalog.ListAsync(cancellationToken)))
     .WithName("ListCurrencies")
     .WithSummary("The currencies the app supports, ordered by code.");
+
+app.MapPost("/api/loans/calculate", Results<Ok<LoanCalculationResult>, ValidationProblem> (LoanCalculationRequest request) =>
+        LoanCalculator.Calculate(request, out var error) is { } result
+            ? TypedResults.Ok(result)
+            : TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["loan"] = [error ?? "The loan is not valid."] }))
+    .WithName("CalculateLoan")
+    .WithSummary("The payment schedule of a variable-rate annuity loan, without and with extra payments. Nothing is stored.");
 
 app.Run();

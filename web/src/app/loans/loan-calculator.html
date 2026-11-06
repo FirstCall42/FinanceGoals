@@ -1,0 +1,274 @@
+<div class="page">
+  <header class="intro">
+    <h1>Mortgage calculator</h1>
+    <p>
+      A variable-rate annuity loan. Extra payments keep the monthly payment and shorten the loan;
+      when the rate changes, the payment is recalculated over the months left. Nothing is stored on
+      the server; the form is kept in this browser.
+    </p>
+  </header>
+
+  <form class="panel" (submit)="calculate($event)">
+    <fieldset>
+      <legend>Loan</legend>
+      <div class="grid">
+        <label class="field">
+          <span>Amount</span>
+          <input
+            inputmode="decimal"
+            [value]="input().principal"
+            (input)="set('principal', text($event))"
+          />
+        </label>
+        <label class="field">
+          <span>Currency</span>
+          <select (change)="set('currency', text($event))">
+            @for (c of currencies(); track c.code) {
+              <option [value]="c.code" [selected]="c.code === input().currency">
+                {{ c.code }}
+              </option>
+            }
+          </select>
+        </label>
+        <label class="field">
+          <span>Paid out</span>
+          <input type="date" [value]="input().paidOut" (input)="set('paidOut', text($event))" />
+        </label>
+        <label class="field">
+          <span>First payment</span>
+          <input
+            type="date"
+            [value]="input().firstPayment"
+            (input)="set('firstPayment', text($event))"
+          />
+        </label>
+        <label class="field">
+          <span>Term (years)</span>
+          <input
+            inputmode="decimal"
+            [value]="input().termYears"
+            (input)="set('termYears', text($event))"
+          />
+        </label>
+        <label class="field">
+          <span>Fee per payment</span>
+          <input inputmode="decimal" [value]="input().fee" (input)="set('fee', text($event))" />
+        </label>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Interest rate</legend>
+      <div class="grid">
+        <label class="field">
+          <span>Rate at payout (%)</span>
+          <input
+            inputmode="decimal"
+            [value]="input().startRate"
+            (input)="set('startRate', text($event))"
+          />
+        </label>
+      </div>
+      @for (change of input().rateChanges; track $index; let i = $index) {
+        <div class="row">
+          <label class="field">
+            <span>Changed from</span>
+            <input
+              type="date"
+              [value]="change.from"
+              (input)="updateRateChange(i, 'from', text($event))"
+            />
+          </label>
+          <label class="field">
+            <span>New rate (%)</span>
+            <input
+              inputmode="decimal"
+              [value]="change.rate"
+              (input)="updateRateChange(i, 'rate', text($event))"
+            />
+          </label>
+          <button
+            type="button"
+            class="remove"
+            (click)="removeRateChange(i)"
+            [attr.aria-label]="'Remove rate change ' + (i + 1)"
+          >
+            Remove
+          </button>
+        </div>
+      }
+      <button type="button" class="secondary" (click)="addRateChange()">Add a rate change</button>
+    </fieldset>
+
+    <fieldset>
+      <legend>Extra payments</legend>
+      <div class="row">
+        <label class="field">
+          <span>Every month</span>
+          <input
+            inputmode="decimal"
+            placeholder="Amount"
+            [value]="input().monthlyAmount"
+            (input)="set('monthlyAmount', text($event))"
+          />
+        </label>
+        <label class="field">
+          <span>From</span>
+          <input
+            type="date"
+            [value]="input().monthlyFrom"
+            (input)="set('monthlyFrom', text($event))"
+          />
+        </label>
+        <label class="field">
+          <span>Until (optional)</span>
+          <input
+            type="date"
+            [value]="input().monthlyUntil"
+            (input)="set('monthlyUntil', text($event))"
+          />
+        </label>
+      </div>
+      @for (extra of input().extras; track $index; let i = $index) {
+        <div class="row">
+          <label class="field">
+            <span>One-off on</span>
+            <input
+              type="date"
+              [value]="extra.date"
+              (input)="updateExtra(i, 'date', text($event))"
+            />
+          </label>
+          <label class="field">
+            <span>Amount</span>
+            <input
+              inputmode="decimal"
+              [value]="extra.amount"
+              (input)="updateExtra(i, 'amount', text($event))"
+            />
+          </label>
+          <button
+            type="button"
+            class="remove"
+            (click)="removeExtra(i)"
+            [attr.aria-label]="'Remove extra payment ' + (i + 1)"
+          >
+            Remove
+          </button>
+        </div>
+      }
+      <button type="button" class="secondary" (click)="addExtra()">
+        Add a one-off extra payment
+      </button>
+    </fieldset>
+
+    <div class="actions">
+      <button type="submit" class="primary" [disabled]="busy()">
+        {{ busy() ? 'Calculating…' : 'Calculate' }}
+      </button>
+      <button type="button" class="secondary" (click)="reset()">Start over</button>
+    </div>
+    @if (error(); as message) {
+      <p class="error" role="alert">{{ message }}</p>
+    }
+  </form>
+
+  @if (result(); as r) {
+    <section class="tiles" aria-label="Summary">
+      <div class="tile">
+        <span class="label">Paid off</span>
+        <strong>{{ monthYear(r.withExtra.lastPayment) }}</strong>
+        <small>without extras: {{ monthYear(r.withoutExtra.lastPayment) }}</small>
+      </div>
+      <div class="tile">
+        <span class="label">Time saved</span>
+        <strong>{{ formatMonths(r.monthsSaved) }}</strong>
+        <small>{{ r.withExtra.payments }} payments instead of {{ r.withoutExtra.payments }}</small>
+      </div>
+      <div class="tile">
+        <span class="label">Interest saved</span>
+        <strong class="fg-amount">{{ r.interestSaved | money: r.currency : minorUnits() }}</strong>
+        <small class="fg-amount"
+          >total interest {{ r.withExtra.totalInterest | money: r.currency : minorUnits() }}</small
+        >
+      </div>
+      @if (nextPayment(); as next) {
+        <div class="tile">
+          <span class="label">Next payment, {{ date(next.date) }}</span>
+          <strong class="fg-amount">{{
+            next.payment + next.fee | money: r.currency : minorUnits()
+          }}</strong>
+          <small class="fg-amount"
+            >interest {{ next.interest | money: r.currency : minorUnits() }}, principal
+            {{ next.principal | money: r.currency : minorUnits() }}</small
+          >
+        </div>
+      }
+    </section>
+
+    <section class="panel" aria-labelledby="schedule-title">
+      <div class="schedule-head">
+        <h2 id="schedule-title">Payment schedule</h2>
+        <div class="toggle" role="group" aria-label="Schedule">
+          <button type="button" [class.on]="showExtras()" (click)="showExtras.set(true)">
+            With extras
+          </button>
+          <button type="button" [class.on]="!showExtras()" (click)="showExtras.set(false)">
+            Without extras
+          </button>
+        </div>
+      </div>
+      @for (y of years(); track y.year) {
+        <details>
+          <summary>
+            <span class="year">{{ y.year }}</span>
+            <span class="fg-amount">paid {{ y.payments | money: r.currency : minorUnits() }}</span>
+            @if (y.extra > 0) {
+              <span class="fg-amount">extra {{ y.extra | money: r.currency : minorUnits() }}</span>
+            }
+            <span class="fg-amount"
+              >interest {{ y.interest | money: r.currency : minorUnits() }}</span
+            >
+            <span class="fg-amount">left {{ y.balance | money: r.currency : minorUnits() }}</span>
+          </summary>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Date</th>
+                  <th scope="col">Rate</th>
+                  <th scope="col">Opening balance</th>
+                  <th scope="col">Interest</th>
+                  <th scope="col">Principal</th>
+                  <th scope="col">Payment</th>
+                  <th scope="col">Extra</th>
+                  <th scope="col">Balance</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (row of y.rows; track row.number) {
+                  <tr>
+                    <td>{{ date(row.date) }}</td>
+                    <td class="fg-amount">{{ percent(row.annualRatePercent) }}</td>
+                    <td class="fg-amount">
+                      {{ row.openingBalance | money: r.currency : minorUnits() }}
+                    </td>
+                    <td class="fg-amount">{{ row.interest | money: r.currency : minorUnits() }}</td>
+                    <td class="fg-amount">
+                      {{ row.principal | money: r.currency : minorUnits() }}
+                    </td>
+                    <td class="fg-amount">{{ row.payment | money: r.currency : minorUnits() }}</td>
+                    <td class="fg-amount">
+                      {{ row.extra > 0 ? (row.extra | money: r.currency : minorUnits()) : '' }}
+                    </td>
+                    <td class="fg-amount">{{ row.balance | money: r.currency : minorUnits() }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </details>
+      }
+    </section>
+  }
+</div>
