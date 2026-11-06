@@ -35,6 +35,7 @@ public static class InfrastructureServices
         services.AddSingleton<IProfileInviteStore, SqlProfileInviteStore>();
         services.AddSingleton<IAccountStore, SqlAccountStore>();
         services.AddSingleton<IAccountValueStore, SqlAccountValueStore>();
+        services.AddSingleton<IAccountAssumptionStore, SqlAccountAssumptionStore>();
         services.AddSingleton<ILoanStore, SqlLoanStore>();
         services.AddSingleton<ILoanExtraStore, SqlLoanExtraStore>();
         services.AddSingleton<SqlExchangeRateStore>();
