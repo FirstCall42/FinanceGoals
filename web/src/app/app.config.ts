@@ -5,7 +5,7 @@ import {
   provideAppInitializer,
   provideBrowserGlobalErrorListeners,
 } from '@angular/core';
-import { provideRouter } from '@angular/router';
+import { provideRouter, withComponentInputBinding } from '@angular/router';
 import { routes } from './app.routes';
 import { authInterceptor } from './auth/auth.interceptor';
 import { AppConfig } from './config/app-config';
@@ -13,7 +13,7 @@ import { AppConfig } from './config/app-config';
 export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
-    provideRouter(routes),
+    provideRouter(routes, withComponentInputBinding()),
     // The interceptor adds the sign-in token to requests to our API.
     provideHttpClient(withFetch(), withInterceptors([authInterceptor])),
     // Read config.json (the API base URL) before the app starts.

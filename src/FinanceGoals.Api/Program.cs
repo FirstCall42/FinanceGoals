@@ -7,6 +7,7 @@ using FinanceGoals.Application.Users;
 using FinanceGoals.Infrastructure;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.Mvc;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -105,19 +106,39 @@ app.MapGet("/api/auth/config", (IConfiguration configuration) =>
     .WithSummary("The Google client ID the web app signs in with; null when sign-in is not set up.")
     .AllowAnonymous();
 
-app.MapPost("/api/me", async (ClaimsPrincipal principal, IAppUserStore users, IProfileStore profiles, CancellationToken cancellationToken) =>
+app.MapPost("/api/me", async (ClaimsPrincipal principal, IAppUserStore users, IProfileStore profiles, CancellationToken cancellationToken, bool createProfile = true) =>
     {
         var user = await users.SignInAsync(
             principal.FindFirstValue("sub") ?? throw new InvalidOperationException("The token has no subject."),
             principal.FindFirstValue("email") ?? throw new InvalidOperationException("The token has no email."),
             principal.FindFirstValue("name"),
             cancellationToken);
-        return TypedResults.Ok(new SignedIn(user, await profiles.EnsureForUserAsync(user.Id, cancellationToken)));
+        // Someone about to accept an invite (createProfile=false) shouldn't get an empty household of their own.
+        return TypedResults.Ok(new SignedIn(user, createProfile
+            ? await profiles.EnsureForUserAsync(user.Id, cancellationToken)
+            : await profiles.ForUserAsync(user.Id, cancellationToken)));
     })
     .WithName("SignIn")
     .WithSummary("Records the sign-in of the Google account in the bearer token; returns the user and their profiles, creating one on the first sign-in.");
 
 app.MapProfiles();
+
+app.MapPost("/api/invites/{token}/accept", async Task<Results<Ok<AcceptedInvite>, NotFound<ProblemDetails>, ProblemHttpResult>> (string token, ClaimsPrincipal principal, IAppUserStore users, IProfileInviteStore invites, CancellationToken cancellationToken) =>
+    {
+        var subject = principal.FindFirstValue("sub") ?? throw new InvalidOperationException("The token has no subject.");
+        var email = principal.FindFirstValue("email") ?? throw new InvalidOperationException("The token has no email.");
+        // Records the sign-in too, so accepting works even before the first POST /api/me.
+        await users.SignInAsync(subject, email, principal.FindFirstValue("name"), cancellationToken);
+        var (outcome, profileId) = await invites.AcceptAsync(token, subject, email, cancellationToken);
+        return outcome switch
+        {
+            InviteOutcome.Accepted => TypedResults.Ok(new AcceptedInvite(profileId!.Value)),
+            InviteOutcome.WrongAccount => TypedResults.Problem("This invite is for another Google account. Sign in with the account it was sent to.", statusCode: StatusCodes.Status403Forbidden),
+            _ => TypedResults.NotFound(new ProblemDetails { Title = "This invite link doesn't work. It may have been used, withdrawn or expired.", Status = StatusCodes.Status404NotFound }),
+        };
+    })
+    .WithName("AcceptInvite")
+    .WithSummary("Joins the profile of an invite link as a Member. The signed-in account's email must match the invite.");
 
 app.Run();
 

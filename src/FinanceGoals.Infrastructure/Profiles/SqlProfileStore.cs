@@ -57,6 +57,28 @@ internal sealed class SqlProfileStore : IProfileStore
         return profiles;
     }
 
+    public async Task<IReadOnlyList<ProfileSummary>> ForUserAsync(int userId, CancellationToken cancellationToken)
+    {
+        await using var connection = await OpenAsync(cancellationToken);
+        await using var command = new SqlCommand(
+            """
+            SELECT p.Id, p.Name, m.Role
+            FROM app.ProfileMember m JOIN app.Profile p ON p.Id = m.ProfileId
+            WHERE m.UserId = @UserId
+            ORDER BY p.Id;
+            """,
+            connection);
+        command.Parameters.Add(new SqlParameter("@UserId", SqlDbType.Int) { Value = userId });
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        var profiles = new List<ProfileSummary>();
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            profiles.Add(new ProfileSummary(reader.GetInt32(0), reader.GetString(1), ParseRole(reader.GetString(2))));
+        }
+
+        return profiles;
+    }
+
     public async Task<ProfileAccess?> AccessAsync(string googleSubject, int profileId, CancellationToken cancellationToken)
     {
         await using var connection = await OpenAsync(cancellationToken);
