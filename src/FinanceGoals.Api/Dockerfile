@@ -8,7 +8,7 @@ COPY global.json Directory.Build.props Directory.Packages.props .editorconfig ./
 COPY src/ src/
 # Code style is enforced by CI ("Build and test"). Re-checking it here would fail on a Windows
 # working copy, whose CRLF line endings the Linux formatter flags.
-RUN --mount=type=cache,target=/root/.nuget/packages \
+RUN --mount=type=cache,target=/root/.nuget/packages,sharing=locked \
     dotnet publish src/FinanceGoals.Api --configuration Release --output /app \
       -p:ContinuousIntegrationBuild=true -p:EnforceCodeStyleInBuild=false
 
