@@ -10,12 +10,18 @@ import { RequestBuilder } from '../../request-builder';
 
 export interface RevokeInvite$Params {
   inviteId: number;
+
+/**
+ * The household profile; the caller must be a member (404 otherwise).
+ */
+  profileId: number;
 }
 
 export function revokeInvite(http: HttpClient, rootUrl: string, params: RevokeInvite$Params, context?: HttpContext): Observable<StrictHttpResponse<void>> {
   const rb = new RequestBuilder(rootUrl, revokeInvite.PATH, 'delete');
   if (params) {
     rb.path('inviteId', params.inviteId, {});
+    rb.path('profileId', params.profileId, {});
   }
 
   return http.request(

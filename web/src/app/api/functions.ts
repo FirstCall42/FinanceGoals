@@ -23,3 +23,9 @@ export type { InviteMember$Params as InviteMember$Params } from './fn/finance-go
 export { inviteMember as inviteMember } from './fn/finance-goals-api/invite-member';
 export type { RevokeInvite$Params as RevokeInvite$Params } from './fn/finance-goals-api/revoke-invite';
 export { revokeInvite as revokeInvite } from './fn/finance-goals-api/revoke-invite';
+export type { ListAccounts$Params as ListAccounts$Params } from './fn/finance-goals-api/list-accounts';
+export { listAccounts as listAccounts } from './fn/finance-goals-api/list-accounts';
+export type { CreateAccount$Params as CreateAccount$Params } from './fn/finance-goals-api/create-account';
+export { createAccount as createAccount } from './fn/finance-goals-api/create-account';
+export type { UpdateAccount$Params as UpdateAccount$Params } from './fn/finance-goals-api/update-account';
+export { updateAccount as updateAccount } from './fn/finance-goals-api/update-account';

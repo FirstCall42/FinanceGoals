@@ -10,11 +10,17 @@ import { RequestBuilder } from '../../request-builder';
 import { ProfileMember } from '../../models/profile-member';
 
 export interface ListProfileMembers$Params {
+
+/**
+ * The household profile; the caller must be a member (404 otherwise).
+ */
+  profileId: number;
 }
 
-export function listProfileMembers(http: HttpClient, rootUrl: string, params?: ListProfileMembers$Params, context?: HttpContext): Observable<StrictHttpResponse<Array<ProfileMember>>> {
+export function listProfileMembers(http: HttpClient, rootUrl: string, params: ListProfileMembers$Params, context?: HttpContext): Observable<StrictHttpResponse<Array<ProfileMember>>> {
   const rb = new RequestBuilder(rootUrl, listProfileMembers.PATH, 'get');
   if (params) {
+    rb.path('profileId', params.profileId, {});
   }
 
   return http.request(

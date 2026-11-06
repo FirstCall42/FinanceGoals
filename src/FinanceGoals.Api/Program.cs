@@ -16,7 +16,7 @@ builder.Services.AddSerilog((services, logger) => ApiLogging.Configure(
     logger,
     builder.Configuration,
     services.GetService<ApiLogging.Output>()?.Writer ?? Console.Out));
-builder.Services.AddOpenApi();
+builder.Services.AddOpenApi(options => options.AddProfileIdParameter());
 builder.Services.AddHealthChecks().AddDatabaseHealthCheck();
 builder.Services.AddInfrastructure();
 builder.Services.AddSingleton(TimeProvider.System);

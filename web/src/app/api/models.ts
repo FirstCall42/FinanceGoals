@@ -3,6 +3,9 @@
 
 export type { AcceptedInvite } from './models/accepted-invite';
 export type { AcceptInvite } from './models/accept-invite';
+export type { Account } from './models/account';
+export type { AccountType } from './models/account-type';
+export type { CreateAccount } from './models/create-account';
 export type { CreatedInvite } from './models/created-invite';
 export type { CurrencyInfo } from './models/currency-info';
 export type { ExtraPaymentInput } from './models/extra-payment-input';
@@ -21,5 +24,6 @@ export type { ScheduleRow } from './models/schedule-row';
 export type { ScheduleSummary } from './models/schedule-summary';
 export type { SignedIn } from './models/signed-in';
 export type { SignInConfig } from './models/sign-in-config';
+export type { UpdateAccount } from './models/update-account';
 export type { UpdateProfile } from './models/update-profile';
 export type { User } from './models/user';

@@ -1,7 +1,9 @@
 using System.Security.Claims;
+using FinanceGoals.Application.Accounts;
 using FinanceGoals.Application.Currencies;
 using FinanceGoals.Application.Profiles;
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.Mvc;
 
 namespace FinanceGoals.Api;
 
@@ -126,6 +128,86 @@ internal static class ProfileEndpoints
             .WithName("RevokeInvite")
             .WithSummary("Withdraws a pending invite. Owners only.");
 
+
+        profile.MapGet("/accounts", async (bool? includeArchived, HttpContext http, IAccountStore accounts, CancellationToken cancellationToken) =>
+                TypedResults.Ok(await accounts.ListAsync(http.Access().ProfileId, includeArchived ?? false, cancellationToken)))
+            .WithName("ListAccounts")
+            .WithSummary("The household's accounts, by name. Archived ones only with includeArchived=true.");
+
+        profile.MapPost("/accounts", async Task<Results<Created<Account>, ValidationProblem, Conflict<ProblemDetails>>> (CreateAccount request, HttpContext http, IAccountStore accounts, ICurrencyCatalog currencies, CancellationToken cancellationToken) =>
+            {
+                var name = request.Name?.Trim() ?? string.Empty;
+                var errors = new Dictionary<string, string[]>();
+                if (name.Length is 0 or > 100)
+                {
+                    errors["name"] = ["The name must be 1 to 100 characters."];
+                }
+
+                if (request.Type is null)
+                {
+                    errors["type"] = ["Pick the type of account."];
+                }
+
+                if (request.CurrencyCode is null || !(await currencies.ListAsync(cancellationToken)).Any(c => c.Code == request.CurrencyCode))
+                {
+                    errors["currencyCode"] = ["Pick one of the supported currencies."];
+                }
+
+                if (errors.Count > 0)
+                {
+                    return TypedResults.ValidationProblem(errors);
+                }
+
+                var access = http.Access();
+                var (outcome, account) = await accounts.CreateAsync(access.ProfileId, name, request.Type!.Value, request.CurrencyCode!, access.UserId, cancellationToken);
+                return outcome == AccountOutcome.NameTaken
+                    ? TypedResults.Conflict(new ProblemDetails { Title = "An account with that name already exists.", Status = StatusCodes.Status409Conflict })
+                    : TypedResults.Created($"/api/profiles/{access.ProfileId}/accounts/{account!.Id}", account);
+            })
+            .WithName("CreateAccount")
+            .WithSummary("Adds an account to the household.");
+
+        profile.MapPatch("/accounts/{accountId:int}", async Task<Results<Ok<Account>, NotFound, ValidationProblem, Conflict<ProblemDetails>>> (int accountId, UpdateAccount request, HttpContext http, IAccountStore accounts, ICurrencyCatalog currencies, CancellationToken cancellationToken) =>
+            {
+                var errors = new Dictionary<string, string[]>();
+                string? name = null;
+                if (request.Name is not null)
+                {
+                    name = request.Name.Trim();
+                    if (name.Length is 0 or > 100)
+                    {
+                        errors["name"] = ["The name must be 1 to 100 characters."];
+                    }
+                }
+
+                if (request.CurrencyCode is not null && !(await currencies.ListAsync(cancellationToken)).Any(c => c.Code == request.CurrencyCode))
+                {
+                    errors["currencyCode"] = ["Pick one of the supported currencies."];
+                }
+
+                if (request.Name is null && request.Type is null && request.CurrencyCode is null && request.Archived is null)
+                {
+                    errors["account"] = ["Send something to change."];
+                }
+
+                if (errors.Count > 0)
+                {
+                    return TypedResults.ValidationProblem(errors);
+                }
+
+                var access = http.Access();
+                var (outcome, account) = await accounts.UpdateAsync(
+                    access.ProfileId, accountId, new AccountChanges(name, request.Type, request.CurrencyCode, request.Archived), access.UserId, cancellationToken);
+                return outcome switch
+                {
+                    AccountOutcome.NotFound => TypedResults.NotFound(),
+                    AccountOutcome.NameTaken => TypedResults.Conflict(new ProblemDetails { Title = "An account with that name already exists.", Status = StatusCodes.Status409Conflict }),
+                    _ => TypedResults.Ok(account!),
+                };
+            })
+            .WithName("UpdateAccount")
+            .WithSummary("Changes an account: name, type, currency, or archive and restore it.");
+
         return profile;
     }
 }
@@ -141,3 +223,9 @@ internal sealed record AcceptedInvite(int ProfileId);
 
 /// <summary>The token from an invite link.</summary>
 internal sealed record AcceptInvite(string? Token = null);
+
+/// <summary>A new account.</summary>
+internal sealed record CreateAccount(string? Name = null, AccountType? Type = null, string? CurrencyCode = null);
+
+/// <summary>Changes to an account; a missing field stays as it is. Archived true archives it, false restores it.</summary>
+internal sealed record UpdateAccount(string? Name = null, AccountType? Type = null, string? CurrencyCode = null, bool? Archived = null);

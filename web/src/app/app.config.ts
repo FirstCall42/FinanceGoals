@@ -8,6 +8,7 @@ import {
 import { provideRouter, withComponentInputBinding } from '@angular/router';
 import { routes } from './app.routes';
 import { authInterceptor } from './auth/auth.interceptor';
+import { ApiConfiguration } from './api/api-configuration';
 import { AppConfig } from './config/app-config';
 
 export const appConfig: ApplicationConfig = {
@@ -16,7 +17,12 @@ export const appConfig: ApplicationConfig = {
     provideRouter(routes, withComponentInputBinding()),
     // The interceptor adds the sign-in token to requests to our API.
     provideHttpClient(withFetch(), withInterceptors([authInterceptor])),
-    // Read config.json (the API base URL) before the app starts.
-    provideAppInitializer(() => inject(AppConfig).load()),
+    // Read config.json (the API base URL) before the app starts, and point the generated API
+    // client (src/app/api) at it.
+    provideAppInitializer(async () => {
+      const config = inject(AppConfig);
+      await config.load();
+      inject(ApiConfiguration).rootUrl = config.apiBaseUrl;
+    }),
   ],
 };
