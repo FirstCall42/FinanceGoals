@@ -21,7 +21,7 @@ public sealed class LoanCalculatorEndpointTests
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         var result = (await response.Content.ReadFromJsonAsync<LoanCalculationResult>()).ShouldNotBeNull();
-        result.WithoutExtraSchedule[0].Payment.ShouldBe(5_845.90m);
+        result.WithoutExtraSchedule[0].Payment.ShouldBe(5_845.33m);
         result.MonthsSaved.ShouldBeGreaterThan(0);
     }
 

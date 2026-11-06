@@ -26,7 +26,7 @@ public sealed class LoanCalculatorTests
         result.ShouldNotBeNull();
         result.Currency.ShouldBe("NOK");
         result.WithoutExtra.Payments.ShouldBe(300);
-        result.WithoutExtraSchedule[0].Payment.ShouldBe(5_845.90m);
+        result.WithoutExtraSchedule[0].Payment.ShouldBe(5_845.33m);
         result.WithoutExtraSchedule[0].AnnualRatePercent.ShouldBe(5m);
         result.WithExtraSchedule[0].Extra.ShouldBe(2_000m);
         result.WithExtraSchedule.Count.ShouldBe(result.WithExtra.Payments);

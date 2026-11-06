@@ -43,7 +43,7 @@ public sealed class LoanScheduleTests
     {
         // From 1 July the rate rises to 6 %; the July payment (interest month from 2 June) still uses
         // 5 %, the August payment (interest month from 2 July) uses 6 % and a new payment.
-        var schedule = LoanSchedule.Calculate(Annuity(1_000_000m, 0.05m, 300, new RateChange(new DateOnly(2026, 7, 1), 0.06m)));
+        var schedule = LoanSchedule.Calculate(Thirty360(Annuity(1_000_000m, 0.05m, 300, new RateChange(new DateOnly(2026, 7, 1), 0.06m))));
 
         var july = schedule.Single(i => i.Date == new DateOnly(2026, 7, 1));
         var august = schedule.Single(i => i.Date == new DateOnly(2026, 8, 1));
@@ -63,36 +63,53 @@ public sealed class LoanScheduleTests
             [new LoanPeriod(_start, RateType.Variable, RepaymentType.Annuity, [new RateChange(_start, 0.05m)])],
             new Money(50m, _nok));
 
-        LoanSchedule.Calculate(loan)[0].Total.ShouldBe(new Money(5_895.90m, _nok));
+        var first = LoanSchedule.Calculate(loan)[0];
+        first.Total.ShouldBe(first.Payment + new Money(50m, _nok));
     }
 
     [TestMethod]
     public void Interest_counts_the_actual_days_over_365_like_the_bank()
     {
-        // 1 000 000 at 6 %: the payment is PMT(0.5 %, 300) = 6 443,01. January has 31 days of
-        // interest (5 095,89), February 28 (4 596,54); principal is what the payment leaves.
+        // 1 000 000 at 6 %: the level payment with real month lengths is 6 442,26 (plain PMT(0.5 %, 300)
+        // is 6 443,01). January has 31 days of interest (5 095,89), February 28 (4 596,54); principal is
+        // what the payment leaves.
         var schedule = LoanSchedule.Calculate(Annuity(1_000_000m, 0.06m, 300));
 
         schedule[0].Interest.ShouldBe(new Money(5_095.89m, _nok));
-        schedule[0].Principal.ShouldBe(new Money(1_347.12m, _nok));
+        schedule[0].Principal.ShouldBe(new Money(1_346.37m, _nok));
         schedule[1].Interest.ShouldBe(new Money(4_596.54m, _nok));
-        schedule[1].Principal.ShouldBe(new Money(1_846.47m, _nok));
-        schedule.SkipLast(1).ShouldAllBe(i => i.Payment.Amount == 6_443.01m);
+        schedule[1].Principal.ShouldBe(new Money(1_845.72m, _nok));
+        schedule.SkipLast(1).ShouldAllBe(i => i.Payment.Amount == 6_442.26m);
         schedule.Count.ShouldBe(300);
         schedule[^1].Balance.Amount.ShouldBe(0m);
     }
 
     [TestMethod]
-    public void Without_rate_changes_the_last_payment_is_close_to_the_regular_one()
+    [DataRow(1_000_000, 6, 300)]
+    [DataRow(1_000_000, 15, 360)]
+    [DataRow(1_000_000, 20, 360)]
+    [DataRow(1_000_000, 20, 600)]
+    public void Without_rate_changes_the_payment_repays_the_loan_on_time(int principal, int ratePercent, int months)
     {
-        // A year's interest is exactly the annual rate (leap years count 366 days), so leap days add
-        // no drift. Months of 28 to 31 days still differ from the even months PMT assumes; over 25
-        // years without a rate change that leaves a few hundred kroner for the last payment.
-        var schedule = LoanSchedule.Calculate(Annuity(1_000_000m, 0.06m, 300));
+        // The level payment counts each month's real days, so month lengths leave no residue to
+        // compound; the last payment differs only by the øre the payment was rounded by, grown at the rate.
+        var schedule = LoanSchedule.Calculate(Annuity(principal, ratePercent / 100m, months));
 
-        schedule.Count.ShouldBe(300);
-        schedule.SkipLast(1).ShouldAllBe(i => i.Payment.Amount == 6_443.01m);
-        Math.Abs(schedule[^1].Payment.Amount - 6_443.01m).ShouldBeLessThan(6_443.01m * 0.1m);
+        var payment = schedule[0].Payment.Amount;
+        schedule.Count.ShouldBe(months);
+        schedule.SkipLast(1).ShouldAllBe(i => i.Payment.Amount == payment);
+        Math.Abs(schedule[^1].Payment.Amount - payment).ShouldBeLessThanOrEqualTo(0.01m * months * Growth(ratePercent / 100m / 12m, months));
+    }
+
+    private static decimal Growth(decimal monthlyRate, int months)
+    {
+        var growth = 1m;
+        for (var i = 0; i < months; i++)
+        {
+            growth *= 1 + monthlyRate;
+        }
+
+        return growth;
     }
 
     [TestMethod]
@@ -126,8 +143,8 @@ public sealed class LoanScheduleTests
         var first = LoanSchedule.Calculate(loan)[0];
 
         first.Interest.ShouldBe(new Money(7_397.26m, _nok));
-        first.Principal.ShouldBe(new Money(1_840.27m, _nok));
-        first.Total.ShouldBe(new Money(9_237.53m, _nok));
+        first.Principal.ShouldBe(new Money(1_838.90m, _nok));
+        first.Total.ShouldBe(new Money(9_236.16m, _nok));
     }
 
     [TestMethod]
