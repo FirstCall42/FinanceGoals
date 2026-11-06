@@ -35,6 +35,13 @@ export class ProfileService {
     return firstValueFrom(this.http.get<PendingInvite[]>(this.url(profileId, '/invites')));
   }
 
+  /** Changes the household's main currency (Owners only). */
+  setMainCurrency(profileId: number, mainCurrency: string): Promise<unknown> {
+    return firstValueFrom(
+      this.http.patch(this.config.apiUrl(`/api/profiles/${profileId}`), { mainCurrency }),
+    );
+  }
+
   invite(profileId: number, email: string): Promise<CreatedInvite> {
     return firstValueFrom(
       this.http.post<CreatedInvite>(this.url(profileId, '/invites'), { email }),

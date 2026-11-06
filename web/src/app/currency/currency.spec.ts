@@ -1,6 +1,7 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
+import { AuthService } from '../auth/auth.service';
 import { Settings } from '../settings/settings';
 import { CurrencySwitcher } from './currency-switcher';
 import { CurrencyInfo, CurrencyService } from './currency.service';
@@ -14,6 +15,16 @@ const list: CurrencyInfo[] = [
 
 describe('Main and display currency', () => {
   let http: HttpTestingController;
+
+  // Settings also shows the household, which loads its members and then its invites.
+  const answerHousehold = async (fixture: { whenStable(): Promise<unknown> }) => {
+    for (let round = 0; round < 3; round++) {
+      http
+        .match((r) => r.method === 'GET' && r.url.startsWith('/api/profiles/4/'))
+        .forEach((r) => r.flush([]));
+      await fixture.whenStable();
+    }
+  };
 
   beforeEach(() => {
     localStorage.clear();
@@ -32,11 +43,16 @@ describe('Main and display currency', () => {
     expect(display.current()).toBe('NOK');
   });
 
-  it('remembers a new main currency and shows amounts in it', () => {
-    TestBed.inject(DisplayCurrencyService).setMain('EUR');
+  it('takes the main currency from the household profile', () => {
+    const auth = TestBed.inject(AuthService);
+    const display = TestBed.inject(DisplayCurrencyService);
 
-    expect(localStorage.getItem('financegoals.mainCurrency')).toBe('EUR');
-    expect(TestBed.inject(DisplayCurrencyService).current()).toBe('EUR');
+    auth.profiles.set([{ id: 1, name: 'Household', role: 'Member', mainCurrency: 'EUR' }]);
+
+    expect(display.main()).toBe('EUR');
+    expect(display.current()).toBe('EUR');
+    auth.profiles.set([]);
+    expect(display.main()).toBe('NOK');
   });
 
   it('switches the display currency for this visit only', () => {
@@ -46,18 +62,24 @@ describe('Main and display currency', () => {
 
     expect(display.current()).toBe('USD');
     expect(display.main()).toBe('NOK');
-    expect(localStorage.getItem('financegoals.mainCurrency')).toBeNull();
+    display.reset();
+    expect(display.current()).toBe('NOK');
   });
 
   it('ignores codes that are not ISO currency codes', () => {
-    localStorage.setItem('financegoals.mainCurrency', 'krone');
     const display = TestBed.inject(DisplayCurrencyService);
 
     display.show('usd');
-    display.setMain('');
 
-    expect(display.main()).toBe('NOK');
     expect(display.current()).toBe('NOK');
+  });
+
+  it('drops the old browser setting', () => {
+    localStorage.setItem('financegoals.mainCurrency', 'EUR');
+
+    TestBed.inject(DisplayCurrencyService);
+
+    expect(localStorage.getItem('financegoals.mainCurrency')).toBeNull();
   });
 
   it('loads the currency list once', async () => {
@@ -86,16 +108,39 @@ describe('Main and display currency', () => {
     expect(TestBed.inject(DisplayCurrencyService).current()).toBe('USD');
   });
 
-  it('settings change the main currency', async () => {
+  it('an owner changes the household main currency in settings', async () => {
+    const auth = TestBed.inject(AuthService);
+    auth.profiles.set([{ id: 4, name: 'Household', role: 'Owner', mainCurrency: 'NOK' }]);
+    auth.token.set('t');
     const fixture = TestBed.createComponent(Settings);
     http.expectOne('/api/currencies').flush(list);
     await fixture.whenStable();
+    await answerHousehold(fixture);
     fixture.detectChanges();
 
     const select = (fixture.nativeElement as HTMLElement).querySelector('select')!;
+    expect(select.disabled).toBe(false);
     select.value = 'EUR';
     select.dispatchEvent(new Event('change'));
+    const patch = http.expectOne('/api/profiles/4');
+    expect(patch.request.method).toBe('PATCH');
+    expect(patch.request.body).toEqual({ mainCurrency: 'EUR' });
+    patch.flush(null, { status: 204, statusText: 'No Content' });
+    await vi.waitFor(() => http.expectOne('/api/me'));
+  });
 
-    expect(TestBed.inject(DisplayCurrencyService).main()).toBe('EUR');
+  it('a member sees the main currency but cannot change it', async () => {
+    TestBed.inject(AuthService).profiles.set([
+      { id: 4, name: 'Household', role: 'Member', mainCurrency: 'EUR' },
+    ]);
+    const fixture = TestBed.createComponent(Settings);
+    http.expectOne('/api/currencies').flush(list);
+    await fixture.whenStable();
+    await answerHousehold(fixture);
+    fixture.detectChanges();
+
+    const select = (fixture.nativeElement as HTMLElement).querySelector('select')!;
+    expect(select.disabled).toBe(true);
+    expect(select.value).toBe('EUR');
   });
 });

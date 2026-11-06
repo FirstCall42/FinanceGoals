@@ -190,13 +190,13 @@
         "tags": [
           "FinanceGoals.Api"
         ],
-        "summary": "Renames the profile. Owners only.",
-        "operationId": "RenameProfile",
+        "summary": "Changes the profile's name and/or main currency. Owners only.",
+        "operationId": "UpdateProfile",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/RenameProfile"
+                "$ref": "#/components/schemas/UpdateProfile"
               }
             }
           },
@@ -803,7 +803,8 @@
         "required": [
           "id",
           "name",
-          "role"
+          "role",
+          "mainCurrency"
         ],
         "type": "object",
         "properties": {
@@ -820,6 +821,9 @@
           },
           "role": {
             "$ref": "#/components/schemas/ProfileRole"
+          },
+          "mainCurrency": {
+            "type": "string"
           }
         },
         "description": "A profile as one of its members sees it."
@@ -845,21 +849,6 @@
           }
         },
         "description": "A rate change: the nominal annual rate in percent (5.24 is 5.24 %) from a date."
-      },
-      "RenameProfile": {
-        "required": [
-          "name"
-        ],
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": [
-              "null",
-              "string"
-            ]
-          }
-        },
-        "description": "A new name for a profile."
       },
       "ScheduleRow": {
         "required": [
@@ -1028,6 +1017,28 @@
           }
         },
         "description": "What the web app needs to show the Google sign-in button."
+      },
+      "UpdateProfile": {
+        "required": [
+          "name",
+          "mainCurrency"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "mainCurrency": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "New settings for a profile; a null one stays as it is."
       },
       "User": {
         "required": [

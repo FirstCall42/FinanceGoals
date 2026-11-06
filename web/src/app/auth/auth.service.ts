@@ -16,6 +16,8 @@ export interface Profile {
   readonly id: number;
   readonly name: string;
   readonly role: 'Owner' | 'Member';
+  /** The household's main currency (#105). */
+  readonly mainCurrency: string;
 }
 
 const storageKey = 'financegoals.idToken';

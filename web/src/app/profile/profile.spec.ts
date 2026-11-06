@@ -36,7 +36,9 @@ describe('Household profile', () => {
   });
 
   it('an owner sees the members, creates an invite and gets the link to send', async () => {
-    TestBed.inject(AuthService).profiles.set([{ id: 4, name: 'Household', role: 'Owner' }]);
+    TestBed.inject(AuthService).profiles.set([
+      { id: 4, name: 'Household', role: 'Owner', mainCurrency: 'NOK' },
+    ]);
     const fixture = TestBed.createComponent(HouseholdSettings);
     await fixture.whenStable();
     http
@@ -73,7 +75,9 @@ describe('Household profile', () => {
   });
 
   it('a member sees the household but cannot invite', async () => {
-    TestBed.inject(AuthService).profiles.set([{ id: 4, name: 'Household', role: 'Member' }]);
+    TestBed.inject(AuthService).profiles.set([
+      { id: 4, name: 'Household', role: 'Member', mainCurrency: 'NOK' },
+    ]);
     const fixture = TestBed.createComponent(HouseholdSettings);
     await fixture.whenStable();
     http.expectOne('/api/profiles/4/members').flush([]);

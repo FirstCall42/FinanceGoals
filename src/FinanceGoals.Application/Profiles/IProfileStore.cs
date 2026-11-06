@@ -11,7 +11,7 @@ public enum ProfileRole
 }
 
 /// <summary>A profile as one of its members sees it.</summary>
-public sealed record ProfileSummary(int Id, string Name, ProfileRole Role);
+public sealed record ProfileSummary(int Id, string Name, ProfileRole Role, string MainCurrency);
 
 /// <summary>A member of a profile.</summary>
 public sealed record ProfileMember(int UserId, string Email, string? Name, ProfileRole Role);
@@ -36,10 +36,11 @@ public interface IProfileStore
     /// <summary>The access of the Google account to a profile, or null if it is not a member.</summary>
     Task<ProfileAccess?> AccessAsync(string googleSubject, int profileId, CancellationToken cancellationToken);
 
-    /// <summary>The profile's name, or null if it doesn't exist.</summary>
-    Task<string?> NameAsync(int profileId, CancellationToken cancellationToken);
+    /// <summary>The profile (with the given role in it), or null if it doesn't exist.</summary>
+    Task<ProfileSummary?> GetAsync(int profileId, ProfileRole role, CancellationToken cancellationToken);
 
-    Task RenameAsync(int profileId, string name, int byUserId, CancellationToken cancellationToken);
+    /// <summary>Changes the name and/or the main currency; null leaves a setting as it is.</summary>
+    Task UpdateAsync(int profileId, string? name, string? mainCurrency, int byUserId, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<ProfileMember>> MembersAsync(int profileId, CancellationToken cancellationToken);
 }
