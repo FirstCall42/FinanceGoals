@@ -21,7 +21,8 @@ public sealed record Installment(
 /// - monthly interest is the balance times the annual rate / 12, using the rate in effect on the first
 ///   day of each interest month (the day after the previous payment); a rate change applies from the
 ///   first interest month that starts on or after its date;
-/// - a first interest period that is not a whole month (a mid-month payout) is prorated by 30/360 days;
+/// - a first interest period that is not a whole month (a mid-month payout) is prorated by 30/360 days,
+///   and the difference from a whole month's interest changes the first payment, not the loan;
 /// - an annuity payment is recalculated over the remaining term whenever the rate changes;
 /// - amounts are rounded to the currency's minor units; the last payment clears the balance, so the
 ///   principal repaid always sums exactly to the loan.
@@ -49,7 +50,8 @@ public static class LoanSchedule
             var monthsOfInterest = number == 1 && loan.Start != loan.FirstPaymentDate.AddMonths(-1)
                 ? Days30360(loan.Start, date) / 30m
                 : 1m;
-            var interest = Round(balance * rate / 12m * monthsOfInterest, currency);
+            var monthInterest = Round(balance * rate / 12m, currency);
+            var interest = monthsOfInterest == 1m ? monthInterest : Round(balance * rate / 12m * monthsOfInterest, currency);
             var remaining = loan.TermMonths - number + 1;
 
             decimal principal;
@@ -62,7 +64,9 @@ public static class LoanSchedule
                         annuityRate = rate;
                     }
 
-                    principal = annuityPayment - interest;
+                    // Principal is repaid as if the month were whole; the extra (or missing) interest days
+                    // of a prorated first period are added to (or taken off) the payment, not the loan.
+                    principal = Math.Max(annuityPayment - monthInterest, 0);
                     break;
                 case RepaymentType.InterestOnly:
                     principal = 0;

@@ -70,7 +70,13 @@ public sealed class LoanScheduleTests
         var loan = new Loan("Mortgage", new Money(1_000_000m, _nok), new DateOnly(2026, 3, 1), 300,
             [new LoanPeriod(paidOut, RateType.Variable, RepaymentType.Annuity, [new RateChange(paidOut, 0.06m)])], paidOut: paidOut);
 
-        LoanSchedule.Calculate(loan)[0].Interest.ShouldBe(new Money(7_666.67m, _nok));
+        // The annuity (6 443,01) repays principal as if the month were whole (6 443,01 - 5 000,00);
+        // the 16 extra days of interest are paid on top, not added to the loan.
+        var first = LoanSchedule.Calculate(loan)[0];
+        first.Interest.ShouldBe(new Money(7_666.67m, _nok));
+        first.Principal.ShouldBe(new Money(1_443.01m, _nok));
+        first.Balance.ShouldBe(new Money(998_556.99m, _nok));
+        first.Total.ShouldBe(new Money(9_109.68m, _nok));
     }
 
     [TestMethod]
@@ -99,13 +105,18 @@ public sealed class LoanScheduleTests
             from months in Gen.Choose(1, 360)
             from changeMonth in Gen.Choose(1, 359)
             from newBasisPoints in Gen.Choose(0, 1500)
+            from payoutShift in Gen.Choose(-27, 27)
             select (Principal: (decimal)principal, Rate: basisPoints / 10_000m, Months: months,
-                ChangeMonth: Math.Min(changeMonth, months), NewRate: newBasisPoints / 10_000m));
+                ChangeMonth: Math.Min(changeMonth, months), NewRate: newBasisPoints / 10_000m,
+                PaidOut: _start.AddDays(payoutShift)));
 
         Prop.ForAll(loans, l =>
             {
-                var change = new RateChange(_start.AddMonths(l.ChangeMonth).AddDays(-1 + 1), l.NewRate);
-                var loan = l.ChangeMonth < l.Months ? Annuity(l.Principal, l.Rate, l.Months, change) : Annuity(l.Principal, l.Rate, l.Months);
+                RateChange[] rates = l.ChangeMonth < l.Months
+                    ? [new RateChange(l.PaidOut, l.Rate), new RateChange(_start.AddMonths(l.ChangeMonth), l.NewRate)]
+                    : [new RateChange(l.PaidOut, l.Rate)];
+                var loan = new Loan("Mortgage", new Money(l.Principal, _nok), _firstPayment, l.Months,
+                    [new LoanPeriod(l.PaidOut, RateType.Variable, RepaymentType.Annuity, rates)], paidOut: l.PaidOut);
                 var schedule = LoanSchedule.Calculate(loan);
                 return schedule.Count == l.Months
                     && schedule.Sum(i => i.Principal.Amount) == l.Principal
