@@ -56,7 +56,7 @@ public sealed class InviteTests
     }
 
     private static Task<HttpResponseMessage> AcceptAsync(string token, string subject, string? email = null) =>
-        SendAsync(HttpMethod.Post, $"/api/invites/{token}/accept", subject, email: email);
+        SendAsync(HttpMethod.Post, "/api/invites/accept", subject, new { token }, email);
 
     [TestMethod]
     public async Task An_invite_adds_the_member_once_and_lasts_seven_days()

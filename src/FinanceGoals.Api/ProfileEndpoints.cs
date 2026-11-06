@@ -116,3 +116,6 @@ internal sealed record InviteMember(string? Email);
 
 /// <summary>The profile an accepted invite joined.</summary>
 internal sealed record AcceptedInvite(int ProfileId);
+
+/// <summary>The token from an invite link.</summary>
+internal sealed record AcceptInvite(string? Token);

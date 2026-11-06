@@ -123,13 +123,14 @@ app.MapPost("/api/me", async (ClaimsPrincipal principal, IAppUserStore users, IP
 
 app.MapProfiles();
 
-app.MapPost("/api/invites/{token}/accept", async Task<Results<Ok<AcceptedInvite>, NotFound<ProblemDetails>, ProblemHttpResult>> (string token, ClaimsPrincipal principal, IAppUserStore users, IProfileInviteStore invites, CancellationToken cancellationToken) =>
+// The token travels in the body, not the path, so it stays out of the request logs.
+app.MapPost("/api/invites/accept", async Task<Results<Ok<AcceptedInvite>, NotFound<ProblemDetails>, ProblemHttpResult>> (AcceptInvite request, ClaimsPrincipal principal, IAppUserStore users, IProfileInviteStore invites, CancellationToken cancellationToken) =>
     {
         var subject = principal.FindFirstValue("sub") ?? throw new InvalidOperationException("The token has no subject.");
         var email = principal.FindFirstValue("email") ?? throw new InvalidOperationException("The token has no email.");
         // Records the sign-in too, so accepting works even before the first POST /api/me.
         await users.SignInAsync(subject, email, principal.FindFirstValue("name"), cancellationToken);
-        var (outcome, profileId) = await invites.AcceptAsync(token, subject, email, cancellationToken);
+        var (outcome, profileId) = await invites.AcceptAsync(request.Token ?? string.Empty, subject, email, cancellationToken);
         return outcome switch
         {
             InviteOutcome.Accepted => TypedResults.Ok(new AcceptedInvite(profileId!.Value)),

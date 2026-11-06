@@ -122,23 +122,23 @@
         }
       }
     },
-    "/api/invites/{token}/accept": {
+    "/api/invites/accept": {
       "post": {
         "tags": [
           "FinanceGoals.Api"
         ],
         "summary": "Joins the profile of an invite link as a Member. The signed-in account's email must match the invite.",
         "operationId": "AcceptInvite",
-        "parameters": [
-          {
-            "name": "token",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcceptInvite"
+              }
             }
-          }
-        ],
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "description": "OK",
@@ -354,6 +354,21 @@
           }
         },
         "description": "The profile an accepted invite joined."
+      },
+      "AcceptInvite": {
+        "required": [
+          "token"
+        ],
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "The token from an invite link."
       },
       "CreatedInvite": {
         "required": [

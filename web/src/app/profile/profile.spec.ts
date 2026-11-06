@@ -20,7 +20,7 @@ describe('Household profile', () => {
   it('accepting a link that no longer works shows the API message', async () => {
     const accepting = TestBed.inject(ProfileService).accept('abc');
     http
-      .expectOne('/api/invites/abc/accept')
+      .expectOne((r) => r.url === '/api/invites/accept' && r.body.token === 'abc')
       .flush(
         { title: "This invite link doesn't work. It may have been used, withdrawn or expired." },
         { status: 404, statusText: 'Not Found' },

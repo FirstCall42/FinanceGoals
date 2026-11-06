@@ -49,10 +49,9 @@ export class ProfileService {
   async accept(token: string): Promise<number> {
     try {
       const accepted = await firstValueFrom(
-        this.http.post<{ profileId: number }>(
-          this.config.apiUrl(`/api/invites/${encodeURIComponent(token)}/accept`),
-          null,
-        ),
+        this.http.post<{ profileId: number }>(this.config.apiUrl('/api/invites/accept'), {
+          token,
+        }),
       );
       return accepted.profileId;
     } catch (error) {

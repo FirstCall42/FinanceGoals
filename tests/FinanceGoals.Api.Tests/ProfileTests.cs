@@ -130,7 +130,7 @@ public sealed partial class ProfileTests
             .ToList();
 
         outside.Where(e => e.Anonymous).Select(e => e.Route).ShouldBeSubsetOf(publicOnPurpose);
-        outside.Where(e => !e.Anonymous).Select(e => e.Route).Order(StringComparer.Ordinal).ShouldBe(["/api/invites/{token}/accept", "/api/me"]);
+        outside.Where(e => !e.Anonymous).Select(e => e.Route).Order(StringComparer.Ordinal).ShouldBe(["/api/invites/accept", "/api/me"]);
     }
 
     [TestMethod]
