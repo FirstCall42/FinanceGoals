@@ -15,7 +15,7 @@ public enum AccountType
 }
 
 /// <summary>An account of a household, in one currency.</summary>
-public sealed record Account(int Id, string Name, AccountType Type, string CurrencyCode, bool Archived);
+public sealed record Account(int Id, string Name, AccountType Type, string CurrencyCode, bool Archived, DateOnly? ArchivedOn = null);
 
 /// <summary>Changes to an account; a null one stays as it is.</summary>
 public sealed record AccountChanges(string? Name, AccountType? Type, string? CurrencyCode, bool? Archived);

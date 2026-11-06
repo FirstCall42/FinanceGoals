@@ -8,6 +8,7 @@ import { AccountType } from '../models/account-type';
  */
 export interface Account {
   archived: boolean;
+  archivedOn?: (string | null);
   currencyCode: string;
   id: (number | string);
   name: string;

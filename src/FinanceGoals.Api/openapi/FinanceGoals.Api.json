@@ -781,6 +781,125 @@
           }
         }
       }
+    },
+    "/api/profiles/{profileId}/net-worth": {
+      "get": {
+        "tags": [
+          "FinanceGoals.Api"
+        ],
+        "summary": "Net worth on a date (default today) in a currency (default the household's main currency): each account's latest balance on or before the date, converted with that day's rates. Missing rates are listed, never replaced by 1.",
+        "operationId": "GetNetWorth",
+        "parameters": [
+          {
+            "name": "currency",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "date",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "profileId",
+            "in": "path",
+            "description": "The household profile; the caller must be a member (404 otherwise).",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NetWorthResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/profiles/{profileId}/net-worth/history": {
+      "get": {
+        "tags": [
+          "FinanceGoals.Api"
+        ],
+        "summary": "Net worth at the end of each month from the first balance, and at the given day (default today), in a currency.",
+        "operationId": "GetNetWorthHistory",
+        "parameters": [
+          {
+            "name": "currency",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "profileId",
+            "in": "path",
+            "description": "The household profile; the caller must be a member (404 otherwise).",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/NetWorthPoint"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -843,6 +962,13 @@
           },
           "archived": {
             "type": "boolean"
+          },
+          "archivedOn": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date"
           }
         },
         "description": "An account of a household, in one currency."
@@ -1239,6 +1365,164 @@
           }
         },
         "description": "An extra repayment with every payment from a date, optionally until a date."
+      },
+      "NetWorthLine": {
+        "required": [
+          "accountId",
+          "name",
+          "type",
+          "currencyCode",
+          "amount",
+          "balanceDate",
+          "converted",
+          "rateDate",
+          "liquid"
+        ],
+        "type": "object",
+        "properties": {
+          "accountId": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/AccountType"
+          },
+          "currencyCode": {
+            "type": "string"
+          },
+          "amount": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "The balance in the account's own currency.",
+            "format": "double"
+          },
+          "balanceDate": {
+            "type": "string",
+            "description": "The day of that balance: the latest on or before the date asked for.",
+            "format": "date"
+          },
+          "converted": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+            "type": [
+              "null",
+              "number",
+              "string"
+            ],
+            "description": "The balance in the target currency, rounded to its minor units; null when a rate is missing.",
+            "format": "double"
+          },
+          "rateDate": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "description": "The date of the oldest exchange rate used; null when no conversion was needed or possible.",
+            "format": "date"
+          },
+          "liquid": {
+            "type": "boolean"
+          }
+        },
+        "description": "One account's part of the net worth on a date."
+      },
+      "NetWorthPoint": {
+        "required": [
+          "date",
+          "total",
+          "liquid",
+          "missingRates"
+        ],
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "total": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "liquid": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "format": "double"
+          },
+          "missingRates": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "description": "Net worth at the end of a month (or today), for the history."
+      },
+      "NetWorthResult": {
+        "required": [
+          "date",
+          "currency",
+          "total",
+          "liquid",
+          "missingRates",
+          "lines"
+        ],
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "total": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "The sum of the converted lines.",
+            "format": "double"
+          },
+          "liquid": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+            "type": [
+              "number",
+              "string"
+            ],
+            "description": "The sum of the liquid lines: property and pensions are left out.",
+            "format": "double"
+          },
+          "missingRates": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NetWorthLine"
+            }
+          }
+        },
+        "description": "Net worth on a date in one currency. Without a rate for some account's currency that account can't be\r\nconverted: it is left out of the totals and its currency listed in IReadOnlyList&lt;string&gt; NetWorthResult.MissingRates, so the\r\ntotals are incomplete and the UI must say so. A missing rate is never treated as 1.0."
       },
       "PendingInvite": {
         "required": [

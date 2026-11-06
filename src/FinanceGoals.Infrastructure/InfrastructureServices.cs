@@ -36,6 +36,7 @@ public static class InfrastructureServices
         services.AddSingleton<SqlExchangeRateStore>();
         services.AddSingleton<IExchangeRateStore>(provider => provider.GetRequiredService<SqlExchangeRateStore>());
         services.AddSingleton<IEurRates>(provider => provider.GetRequiredService<SqlExchangeRateStore>());
+        services.AddSingleton<IRateHistory>(provider => provider.GetRequiredService<SqlExchangeRateStore>());
         services.AddHttpClient<IExchangeRateSource, EcbExchangeRateSource>((provider, client) =>
         {
             client.BaseAddress = new Uri(provider.GetRequiredService<IConfiguration>()[EcbUrlSetting] ?? EcbExchangeRateSource.DefaultUrl);
