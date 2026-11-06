@@ -6,6 +6,7 @@ import { DisplayCurrencyService } from '../currency/display-currency.service';
 import { MissingRate } from '../money/missing-rate';
 import { MoneyPipe } from '../money/money.pipe';
 import { messageOf } from '../profile/profile.service';
+import { NetWorthChart } from './net-worth-chart';
 import { NetWorth, NetWorthPoint, NetWorthService } from './net-worth.service';
 
 /**
@@ -16,7 +17,7 @@ import { NetWorth, NetWorthPoint, NetWorthService } from './net-worth.service';
  */
 @Component({
   selector: 'app-net-worth',
-  imports: [MoneyPipe, MissingRate],
+  imports: [MoneyPipe, MissingRate, NetWorthChart],
   template: `
     <section class="panel" aria-labelledby="nw-title">
       <h1 id="nw-title">Net worth</h1>
@@ -107,6 +108,12 @@ import { NetWorth, NetWorthPoint, NetWorthService } from './net-worth.service';
 
           @if (history().length > 0) {
             <h2>Month by month</h2>
+            <app-net-worth-chart [points]="history()" [currency]="nw.currency" />
+            @if (rateDate(); as rate) {
+              <p class="note">
+                Converted with exchange rates from {{ formatDate(rate) }} or earlier.
+              </p>
+            }
             <div class="table-wrap">
               <table>
                 <thead>

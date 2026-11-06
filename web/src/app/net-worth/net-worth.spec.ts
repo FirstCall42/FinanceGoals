@@ -101,6 +101,9 @@ describe('Net worth page', () => {
       expect(text).toContain('not liquid');
       expect(text).toContain('Month by month');
       expect(text).toContain('excl. RON');
+      const chart = (fixture.nativeElement as HTMLElement).querySelector('svg[role=img]');
+      expect(chart?.getAttribute('aria-label')).toContain('Net worth over time in NOK');
+      expect(chart?.querySelectorAll('circle.hollow').length).toBe(1);
     });
   });
 
