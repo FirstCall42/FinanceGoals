@@ -1,11 +1,13 @@
 using FinanceGoals.Application.Accounts;
 using FinanceGoals.Application.Currencies;
+using FinanceGoals.Application.Loans;
 using FinanceGoals.Application.Profiles;
 using FinanceGoals.Application.Users;
 using FinanceGoals.Domain.Currencies;
 using FinanceGoals.Infrastructure.Accounts;
 using FinanceGoals.Infrastructure.Currencies;
 using FinanceGoals.Infrastructure.Health;
+using FinanceGoals.Infrastructure.Loans;
 using FinanceGoals.Infrastructure.Profiles;
 using FinanceGoals.Infrastructure.Users;
 using Microsoft.Extensions.Configuration;
@@ -33,6 +35,7 @@ public static class InfrastructureServices
         services.AddSingleton<IProfileInviteStore, SqlProfileInviteStore>();
         services.AddSingleton<IAccountStore, SqlAccountStore>();
         services.AddSingleton<IAccountValueStore, SqlAccountValueStore>();
+        services.AddSingleton<ILoanStore, SqlLoanStore>();
         services.AddSingleton<SqlExchangeRateStore>();
         services.AddSingleton<IExchangeRateStore>(provider => provider.GetRequiredService<SqlExchangeRateStore>());
         services.AddSingleton<IEurRates>(provider => provider.GetRequiredService<SqlExchangeRateStore>());

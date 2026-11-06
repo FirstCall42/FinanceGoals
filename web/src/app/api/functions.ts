@@ -41,3 +41,11 @@ export type { GetNetWorth$Params as GetNetWorth$Params } from './fn/finance-goal
 export { getNetWorth as getNetWorth } from './fn/finance-goals-api/get-net-worth';
 export type { GetNetWorthHistory$Params as GetNetWorthHistory$Params } from './fn/finance-goals-api/get-net-worth-history';
 export { getNetWorthHistory as getNetWorthHistory } from './fn/finance-goals-api/get-net-worth-history';
+export type { ListLoans$Params as ListLoans$Params } from './fn/finance-goals-api/list-loans';
+export { listLoans as listLoans } from './fn/finance-goals-api/list-loans';
+export type { CreateLoan$Params as CreateLoan$Params } from './fn/finance-goals-api/create-loan';
+export { createLoan as createLoan } from './fn/finance-goals-api/create-loan';
+export type { GetLoan$Params as GetLoan$Params } from './fn/finance-goals-api/get-loan';
+export { getLoan as getLoan } from './fn/finance-goals-api/get-loan';
+export type { AddLoanRateChange$Params as AddLoanRateChange$Params } from './fn/finance-goals-api/add-loan-rate-change';
+export { addLoanRateChange as addLoanRateChange } from './fn/finance-goals-api/add-loan-rate-change';
