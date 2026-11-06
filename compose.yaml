@@ -1,0 +1,81 @@
+# The whole app on your machine with one command (#13):
+#   docker compose up --build
+# Web http://localhost:4200, API http://localhost:5208, SQL Server localhost:1433 (sa).
+# Every password here is for this local stack only; set your own in a .env file (see .env.example).
+name: financegoals
+
+services:
+  sql:
+    # The same image the integration tests use.
+    image: mcr.microsoft.com/mssql/server:2022-CU27-ubuntu-22.04
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: ${SA_PASSWORD:-Local_sa_Pw1!}
+    ports:
+      - "1433:1433"
+    volumes:
+      - sql-data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -Q 'SELECT 1' -b -o /dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  # Creates the contained database (users with passwords need CONTAINMENT = PARTIAL), once.
+  db-init:
+    image: mcr.microsoft.com/mssql/server:2022-CU27-ubuntu-22.04
+    depends_on:
+      sql:
+        condition: service_healthy
+    environment:
+      SA_PASSWORD: ${SA_PASSWORD:-Local_sa_Pw1!}
+    volumes:
+      - ./compose/init-database.sql:/init-database.sql:ro
+    entrypoint: ["/bin/sh", "-c", "/opt/mssql-tools18/bin/sqlcmd -C -S sql -U sa -P \"$$SA_PASSWORD\" -b -i /init-database.sql"]
+    restart: "no"
+
+  migrator:
+    build:
+      context: .
+      dockerfile: src/FinanceGoals.Migrator/Dockerfile
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+    environment:
+      ConnectionStrings__SchemaOwner: Server=sql;Database=FinanceGoals;User Id=sa;Password=${SA_PASSWORD:-Local_sa_Pw1!};TrustServerCertificate=True
+      Migrator__AppUser: financegoals_app
+      Migrator__AppUserKind: password
+      Migrator__AppUserPassword: ${APP_PASSWORD:-Local_app_Pw1!}
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      dockerfile: src/FinanceGoals.Api/Dockerfile
+    depends_on:
+      migrator:
+        condition: service_completed_successfully
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__App: Server=sql;Database=FinanceGoals;User Id=financegoals_app;Password=${APP_PASSWORD:-Local_app_Pw1!};TrustServerCertificate=True
+      Cors__AllowedOrigins__0: http://localhost:4200
+      # The owner's Google OAuth client, which allows http://localhost:4200. Public, not a secret.
+      Auth__Google__ClientId: ${GOOGLE_CLIENT_ID:-595594110205-6u9t88uhcmnlq3j3gq72grisc1qpocf4.apps.googleusercontent.com}
+    ports:
+      - "5208:8080"
+
+  web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+    depends_on:
+      - api
+    # The same build as in the cloud; like the deploy, Compose supplies config.json.
+    volumes:
+      - ./compose/config.json:/usr/share/nginx/html/config.json:ro
+    ports:
+      - "4200:8080"
+
+volumes:
+  sql-data:
