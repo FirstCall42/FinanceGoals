@@ -10,6 +10,9 @@ public enum ValueOutcome
 
     /// <summary>A balance is for an account that isn't in the household. Nothing was saved.</summary>
     UnknownAccount,
+
+    /// <summary>An account's currency is no longer the one the balance was entered in. Nothing was saved.</summary>
+    CurrencyChanged,
 }
 
 /// <summary>Account balances on dates (#36). Every method is scoped to one profile.</summary>
@@ -18,8 +21,8 @@ public interface IAccountValueStore
     /// <summary>The household's balances, newest first; one account's if <paramref name="accountId"/> is given.</summary>
     Task<IReadOnlyList<AccountValue>> ListAsync(int profileId, int? accountId, CancellationToken cancellationToken);
 
-    /// <summary>Records balances on one date (a snapshot); a balance already recorded for that account and date is replaced. All or nothing.</summary>
-    Task<ValueOutcome> SaveAsync(int profileId, DateOnly day, IReadOnlyList<(int AccountId, decimal Amount)> values, int byUserId, CancellationToken cancellationToken);
+    /// <summary>Records balances on one date (a snapshot); a balance already recorded for that account and date is replaced. All or nothing. Each balance names the currency it was entered in; if the account has another one by now, nothing is saved.</summary>
+    Task<ValueOutcome> SaveAsync(int profileId, DateOnly day, IReadOnlyList<(int AccountId, decimal Amount, string CurrencyCode)> values, int byUserId, CancellationToken cancellationToken);
 
     /// <summary>Deletes an account's balance on a date; false if there is none.</summary>
     Task<bool> DeleteAsync(int profileId, int accountId, DateOnly day, CancellationToken cancellationToken);

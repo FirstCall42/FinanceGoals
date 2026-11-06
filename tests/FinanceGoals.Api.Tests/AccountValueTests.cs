@@ -5,6 +5,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using FinanceGoals.Application.Accounts;
 using FinanceGoals.Migrator.Tests;
+using Microsoft.Data.SqlClient;
 using migrator::FinanceGoals.Migrator;
 
 namespace FinanceGoals.Api.Tests;
@@ -12,15 +13,16 @@ namespace FinanceGoals.Api.Tests;
 [TestClass]
 public sealed class AccountValueTests
 {
+    private static string _database = string.Empty;
     private static ApiFactory? _api;
 
     [ClassInitialize]
     public static async Task StartAsync(TestContext context)
     {
-        var database = await SqlServer.CreateDatabaseAsync();
+        _database = await SqlServer.CreateDatabaseAsync();
         var password = SqlServer.NewPassword();
-        new DatabaseMigrator(database, TextWriter.Null).Run(AppUser.WithPassword("financegoals_app", password));
-        _api = new ApiFactory(SqlServer.As(database, "financegoals_app", password));
+        new DatabaseMigrator(_database, TextWriter.Null).Run(AppUser.WithPassword("financegoals_app", password));
+        _api = new ApiFactory(SqlServer.As(_database, "financegoals_app", password));
     }
 
     [ClassCleanup]
@@ -143,6 +145,59 @@ public sealed class AccountValueTests
     }
 
     [TestMethod]
+    public async Task A_save_waits_for_a_currency_change_in_flight_and_is_then_refused()
+    {
+        var profileId = await ProfileOfAsync("val-owner-7");
+        var account = await AccountAsync(profileId, "val-owner-7", "Racing");
+        await using var holder = new SqlConnection(_database);
+        await holder.OpenAsync();
+        await using var transaction = (SqlTransaction)await holder.BeginTransactionAsync();
+        // Stands in for a currency change that has begun: it holds the account row. Plain reads still
+        // pass, so the snapshot validates against NOK and then has to wait for the row at the save.
+        await ExecuteAsync(holder, transaction, $"SELECT 1 FROM app.Account WITH (UPDLOCK) WHERE Id = {account.Id};");
+
+        var save = SnapshotAsync(profileId, "val-owner-7", "2026-01-31", (account.Id, 1_000m));
+        await Task.Delay(TimeSpan.FromSeconds(2));
+        var waited = !save.IsCompleted;
+        await ExecuteAsync(holder, transaction, $"UPDATE app.Account SET CurrencyCode = 'EUR' WHERE Id = {account.Id};");
+        await transaction.CommitAsync();
+        var response = await save;
+
+        waited.ShouldBeTrue("the save should wait for the account row");
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        (await response.Content.ReadAsStringAsync()).ShouldContain("currency changed");
+        (await ValuesAsync(profileId, "val-owner-7")).ShouldBeEmpty();
+    }
+
+    [TestMethod]
+    public async Task A_currency_change_waits_for_a_save_in_flight_and_then_sees_its_balance()
+    {
+        var signedIn = (await (await SendAsync(HttpMethod.Post, "/api/me", "val-owner-8")).Content.ReadFromJsonAsync<SignedIn>()).ShouldNotBeNull();
+        var profileId = signedIn.Profiles[0].Id;
+        var account = await AccountAsync(profileId, "val-owner-8", "Racing too");
+        await using var holder = new SqlConnection(_database);
+        await holder.OpenAsync();
+        await using var transaction = (SqlTransaction)await holder.BeginTransactionAsync();
+        // Stands in for a save that has begun: it holds the account row and has written the first balance.
+        await ExecuteAsync(holder, transaction, $"SELECT 1 FROM app.Account WITH (UPDLOCK, HOLDLOCK) WHERE Id = {account.Id};");
+        await ExecuteAsync(
+            holder,
+            transaction,
+            $"INSERT INTO app.AccountValue (AccountId, ValueDate, ProfileId, Amount, CreatedBy, UpdatedBy) VALUES ({account.Id}, '2026-01-31', {profileId}, 1000, {signedIn.User.Id}, {signedIn.User.Id});");
+
+        var change = SendAsync(HttpMethod.Patch, $"/api/profiles/{profileId}/accounts/{account.Id}", "val-owner-8", new { currencyCode = "EUR" });
+        await Task.Delay(TimeSpan.FromSeconds(2));
+        var waited = !change.IsCompleted;
+        await transaction.CommitAsync();
+        var response = await change;
+        var accounts = await (await SendAsync(HttpMethod.Get, $"/api/profiles/{profileId}/accounts", "val-owner-8")).Content.ReadFromJsonAsync<List<Account>>();
+
+        waited.ShouldBeTrue("the currency change should wait for the account row");
+        response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        accounts.ShouldNotBeNull().ShouldHaveSingleItem().CurrencyCode.ShouldBe("NOK");
+    }
+
+    [TestMethod]
     public async Task Invalid_snapshots_are_refused_and_nothing_is_saved()
     {
         var profileId = await ProfileOfAsync("val-owner-5");
@@ -187,4 +242,10 @@ public sealed class AccountValueTests
         (await ValuesAsync(profileB, "val-owner-6b")).ShouldBeEmpty();
         (await ValuesAsync(profileA, "val-owner-6a")).ShouldHaveSingleItem().Amount.ShouldBe(500m);
     }
+    private static async Task ExecuteAsync(SqlConnection connection, SqlTransaction transaction, string sql)
+    {
+        await using var command = new SqlCommand(sql, connection, transaction);
+        await command.ExecuteNonQueryAsync();
+    }
+
 }

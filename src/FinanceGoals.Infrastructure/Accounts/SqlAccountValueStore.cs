@@ -8,22 +8,30 @@ namespace FinanceGoals.Infrastructure.Accounts;
 /// <summary>Reads and writes app.AccountValue with the API's own connection (the app user).</summary>
 internal sealed class SqlAccountValueStore : IAccountValueStore
 {
-    // Replaces the balance of that account and date, or adds it. The insert checks the account is in
-    // the profile, so a balance for another household's account saves nothing.
+    // Locks the account row first (held to the end of the transaction), so the currency can't change
+    // between the check and the write: a currency change takes the same lock and waits, or sees the
+    // balance. Returns 1 saved, 0 not in the profile, -1 the account's currency is not the expected one.
+    // Replaces the balance of that account and date, or adds it.
     private const string _saveSql = """
         DECLARE @Saved int = 0;
-        UPDATE app.AccountValue WITH (UPDLOCK, SERIALIZABLE)
-        SET Amount = @Amount, UpdatedAt = SYSUTCDATETIME(), UpdatedBy = @UserId
-        WHERE AccountId = @AccountId AND ProfileId = @ProfileId AND ValueDate = @Date;
-        IF @@ROWCOUNT > 0
-            SET @Saved = 1;
+        DECLARE @Currency char(3) = (SELECT CurrencyCode FROM app.Account WITH (UPDLOCK, HOLDLOCK) WHERE Id = @AccountId AND ProfileId = @ProfileId);
+        IF @Currency IS NULL
+            SET @Saved = 0;
+        ELSE IF @Currency <> @CurrencyCode
+            SET @Saved = -1;
         ELSE
         BEGIN
-            INSERT INTO app.AccountValue (AccountId, ValueDate, ProfileId, Amount, CreatedBy, UpdatedBy)
-            SELECT a.Id, @Date, a.ProfileId, @Amount, @UserId, @UserId
-            FROM app.Account a
-            WHERE a.Id = @AccountId AND a.ProfileId = @ProfileId;
-            SET @Saved = @@ROWCOUNT;
+            UPDATE app.AccountValue WITH (UPDLOCK, SERIALIZABLE)
+            SET Amount = @Amount, UpdatedAt = SYSUTCDATETIME(), UpdatedBy = @UserId
+            WHERE AccountId = @AccountId AND ProfileId = @ProfileId AND ValueDate = @Date;
+            IF @@ROWCOUNT > 0
+                SET @Saved = 1;
+            ELSE
+            BEGIN
+                INSERT INTO app.AccountValue (AccountId, ValueDate, ProfileId, Amount, CreatedBy, UpdatedBy)
+                VALUES (@AccountId, @Date, @ProfileId, @Amount, @UserId, @UserId);
+                SET @Saved = 1;
+            END;
         END;
         SELECT @Saved;
         """;
@@ -58,22 +66,25 @@ internal sealed class SqlAccountValueStore : IAccountValueStore
     }
 
     public async Task<ValueOutcome> SaveAsync(
-        int profileId, DateOnly day, IReadOnlyList<(int AccountId, decimal Amount)> values, int byUserId, CancellationToken cancellationToken)
+        int profileId, DateOnly day, IReadOnlyList<(int AccountId, decimal Amount, string CurrencyCode)> values, int byUserId, CancellationToken cancellationToken)
     {
         await using var connection = await OpenAsync(cancellationToken);
         await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(cancellationToken);
-        foreach (var (accountId, amount) in values)
+        // Accounts are locked one after the other, always in id order, so two snapshots can't deadlock.
+        foreach (var (accountId, amount, currencyCode) in values.OrderBy(v => v.AccountId))
         {
             await using var command = new SqlCommand(_saveSql, connection, transaction);
             command.Parameters.Add(new SqlParameter("@ProfileId", SqlDbType.Int) { Value = profileId });
             command.Parameters.Add(new SqlParameter("@AccountId", SqlDbType.Int) { Value = accountId });
             command.Parameters.Add(new SqlParameter("@Date", SqlDbType.Date) { Value = day.ToDateTime(TimeOnly.MinValue) });
             command.Parameters.Add(new SqlParameter("@Amount", SqlDbType.Decimal) { Precision = 19, Scale = 4, Value = amount });
+            command.Parameters.Add(new SqlParameter("@CurrencyCode", SqlDbType.Char, 3) { Value = currencyCode });
             command.Parameters.Add(new SqlParameter("@UserId", SqlDbType.Int) { Value = byUserId });
-            if ((int)(await command.ExecuteScalarAsync(cancellationToken))! == 0)
+            var saved = (int)(await command.ExecuteScalarAsync(cancellationToken))!;
+            if (saved != 1)
             {
                 await transaction.RollbackAsync(cancellationToken);
-                return ValueOutcome.UnknownAccount;
+                return saved == 0 ? ValueOutcome.UnknownAccount : ValueOutcome.CurrencyChanged;
             }
         }
 

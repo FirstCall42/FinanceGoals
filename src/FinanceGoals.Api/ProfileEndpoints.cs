@@ -35,10 +35,11 @@ internal static class ProfileEndpoints
     /// the household's, no account twice, and amounts that are whole minor units (øre, cents) of the
     /// account's own currency, because an amount has no currency of its own.
     /// </summary>
-    private static async Task<Dictionary<string, string[]>> ValidateSnapshotAsync(
+    private static async Task<(Dictionary<string, string[]> Errors, Dictionary<int, string> AccountCurrency)> ValidateSnapshotAsync(
         SaveSnapshot request, int profileId, IAccountStore accounts, ICurrencyCatalog currencies, TimeProvider clock, CancellationToken cancellationToken)
     {
         var errors = new Dictionary<string, string[]>();
+        var accountCurrency = new Dictionary<int, string>();
         // A day ahead of UTC, so a date that is "today" anywhere on Earth is accepted.
         var latest = DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime).AddDays(1);
         if (request.Date is not { } date || date < _earliestSnapshot || date > latest)
@@ -49,16 +50,16 @@ internal static class ProfileEndpoints
         if (request.Values is not { Count: > 0 and <= _maxSnapshotValues } values)
         {
             errors["values"] = [$"Record the balance of at least one account, and at most {_maxSnapshotValues}."];
-            return errors;
+            return (errors, accountCurrency);
         }
 
         if (values.Any(v => v.AccountId is null || v.Amount is null) || values.Select(v => v.AccountId).Distinct().Count() != values.Count)
         {
             errors["values"] = ["Each balance needs an account and an amount, and an account can appear once."];
-            return errors;
+            return (errors, accountCurrency);
         }
 
-        var accountCurrency = (await accounts.ListAsync(profileId, includeArchived: true, cancellationToken)).ToDictionary(a => a.Id, a => a.CurrencyCode);
+        accountCurrency = (await accounts.ListAsync(profileId, includeArchived: true, cancellationToken)).ToDictionary(a => a.Id, a => a.CurrencyCode);
         var minorUnits = (await currencies.ListAsync(cancellationToken)).ToDictionary(c => c.Code, c => (int)c.MinorUnits);
         var problems = new List<string>();
         foreach (var value in values)
@@ -82,7 +83,7 @@ internal static class ProfileEndpoints
             errors["values"] = [.. problems.Distinct()];
         }
 
-        return errors;
+        return (errors, accountCurrency);
     }
 
     public static RouteGroupBuilder MapProfiles(this IEndpointRouteBuilder app)
@@ -278,20 +279,23 @@ internal static class ProfileEndpoints
             .WithName("ListAccountValues")
             .WithSummary("The household's account balances, newest first; one account's with accountId.");
 
-        profile.MapPost("/snapshots", async Task<Results<Ok<SnapshotSaved>, ValidationProblem>> (SaveSnapshot request, HttpContext http, IAccountStore accounts, IAccountValueStore values, ICurrencyCatalog currencies, TimeProvider clock, CancellationToken cancellationToken) =>
+        profile.MapPost("/snapshots", async Task<Results<Ok<SnapshotSaved>, ValidationProblem, Conflict<ProblemDetails>>> (SaveSnapshot request, HttpContext http, IAccountStore accounts, IAccountValueStore values, ICurrencyCatalog currencies, TimeProvider clock, CancellationToken cancellationToken) =>
             {
                 var access = http.Access();
-                var errors = await ValidateSnapshotAsync(request, access.ProfileId, accounts, currencies, clock, cancellationToken);
+                var (errors, accountCurrency) = await ValidateSnapshotAsync(request, access.ProfileId, accounts, currencies, clock, cancellationToken);
                 if (errors.Count > 0)
                 {
                     return TypedResults.ValidationProblem(errors);
                 }
 
                 var outcome = await values.SaveAsync(
-                    access.ProfileId, request.Date!.Value, [.. request.Values!.Select(v => (v.AccountId!.Value, v.Amount!.Value))], access.UserId, cancellationToken);
-                return outcome == ValueOutcome.Saved
-                    ? TypedResults.Ok(new SnapshotSaved(request.Date.Value, request.Values!.Count))
-                    : TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["values"] = ["A balance is for an account that is not in this household."] });
+                    access.ProfileId, request.Date!.Value, [.. request.Values!.Select(v => (v.AccountId!.Value, v.Amount!.Value, accountCurrency[v.AccountId.Value]))], access.UserId, cancellationToken);
+                return outcome switch
+                {
+                    ValueOutcome.Saved => TypedResults.Ok(new SnapshotSaved(request.Date.Value, request.Values!.Count)),
+                    ValueOutcome.CurrencyChanged => TypedResults.Conflict(new ProblemDetails { Title = "An account's currency changed while you were saving. Reload the page and enter the balances again.", Status = StatusCodes.Status409Conflict }),
+                    _ => TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["values"] = ["A balance is for an account that is not in this household."] }),
+                };
             })
             .WithName("SaveSnapshot")
             .WithSummary("Records the balances of several accounts on one date. A balance already recorded for that account and date is replaced; accounts left out are not recorded.");
