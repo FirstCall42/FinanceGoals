@@ -1,0 +1,241 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 1040px;
+}
+
+.intro h1 {
+  margin: 0 0 6px;
+  font-size: 22px;
+}
+
+.intro p {
+  margin: 0;
+  color: var(--fg-muted);
+  max-width: 68ch;
+}
+
+.panel {
+  background: var(--fg-surface);
+  border: 1px solid var(--fg-line);
+  border-radius: var(--fg-radius);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}
+
+fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+legend {
+  font-weight: 600;
+  margin-bottom: 4px;
+  padding: 0;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.row .field {
+  flex: 1 1 160px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--fg-muted);
+}
+
+input,
+select {
+  min-height: 44px;
+  padding: 0 10px;
+  border-radius: 10px;
+  border: 1px solid var(--fg-line);
+  background: var(--fg-surface);
+  color: var(--fg-ink);
+  font: inherit;
+  font-size: 15px;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+button {
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 10px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.primary {
+  background: var(--fg-accent);
+  color: var(--fg-on-accent);
+  border: 0;
+  font-weight: 600;
+}
+
+.primary:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.secondary,
+.remove {
+  background: transparent;
+  color: var(--fg-ink);
+  border: 1px solid var(--fg-line);
+}
+
+.secondary {
+  align-self: flex-start;
+}
+
+.actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.error {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--fg-warn-bg);
+  color: var(--fg-warn-ink);
+  border: 1px solid var(--fg-warn-line);
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.tile {
+  background: var(--fg-surface);
+  border: 1px solid var(--fg-line);
+  border-radius: var(--fg-radius);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tile .label,
+.tile small {
+  color: var(--fg-muted);
+  font-size: 13px;
+}
+
+.tile strong {
+  font-size: 22px;
+}
+
+.schedule-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.schedule-head h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.toggle {
+  display: inline-flex;
+  border: 1px solid var(--fg-line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.toggle button {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--fg-ink);
+}
+
+.toggle button.on {
+  background: var(--fg-accent);
+  color: var(--fg-on-accent);
+}
+
+details {
+  border-top: 1px solid var(--fg-line);
+}
+
+summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  padding: 12px 0;
+  cursor: pointer;
+  color: var(--fg-muted);
+  font-size: 14px;
+}
+
+summary .year {
+  color: var(--fg-ink);
+  font-weight: 600;
+  min-width: 3.5em;
+}
+
+.table-wrap {
+  overflow-x: auto;
+  padding-bottom: 12px;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 14px;
+}
+
+th,
+td {
+  padding: 6px 10px;
+  text-align: right;
+  border-bottom: 1px solid var(--fg-line);
+}
+
+th:first-child,
+td:first-child {
+  text-align: left;
+}
+
+th {
+  color: var(--fg-muted);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+// Amounts keep their figures together, but a tile's second line may wrap between them.
+.tile small.fg-amount {
+  white-space: normal;
+}
