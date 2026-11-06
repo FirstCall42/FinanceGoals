@@ -2,6 +2,7 @@ using System.Security.Claims;
 using FinanceGoals.Api;
 using FinanceGoals.Application.Currencies;
 using FinanceGoals.Application.Loans;
+using FinanceGoals.Application.Profiles;
 using FinanceGoals.Application.Users;
 using FinanceGoals.Infrastructure;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
@@ -104,16 +105,24 @@ app.MapGet("/api/auth/config", (IConfiguration configuration) =>
     .WithSummary("The Google client ID the web app signs in with; null when sign-in is not set up.")
     .AllowAnonymous();
 
-app.MapPost("/api/me", async (ClaimsPrincipal principal, IAppUserStore users, CancellationToken cancellationToken) =>
-        TypedResults.Ok(await users.SignInAsync(
+app.MapPost("/api/me", async (ClaimsPrincipal principal, IAppUserStore users, IProfileStore profiles, CancellationToken cancellationToken) =>
+    {
+        var user = await users.SignInAsync(
             principal.FindFirstValue("sub") ?? throw new InvalidOperationException("The token has no subject."),
             principal.FindFirstValue("email") ?? throw new InvalidOperationException("The token has no email."),
             principal.FindFirstValue("name"),
-            cancellationToken)))
+            cancellationToken);
+        return TypedResults.Ok(new SignedIn(user, await profiles.EnsureForUserAsync(user.Id, cancellationToken)));
+    })
     .WithName("SignIn")
-    .WithSummary("Records the sign-in of the Google account in the bearer token and returns the user.");
+    .WithSummary("Records the sign-in of the Google account in the bearer token; returns the user and their profiles, creating one on the first sign-in.");
+
+app.MapProfiles();
 
 app.Run();
 
 /// <summary>What the web app needs to show the Google sign-in button.</summary>
 internal sealed record SignInConfig(string? GoogleClientId);
+
+/// <summary>The signed-in user and the profiles they belong to.</summary>
+internal sealed record SignedIn(User User, IReadOnlyList<ProfileSummary> Profiles);

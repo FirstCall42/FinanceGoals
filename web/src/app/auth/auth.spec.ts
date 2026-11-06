@@ -47,10 +47,14 @@ describe('Sign-in', () => {
     const request = http.expectOne('/api/me');
     expect(request.request.method).toBe('POST');
     expect(request.request.headers.get('Authorization')).toBe(`Bearer ${credential}`);
-    request.flush({ id: 7, email: 'owner@example.com', name: 'Owner' });
+    request.flush({
+      user: { id: 7, email: 'owner@example.com', name: 'Owner' },
+      profiles: [{ id: 3, name: 'Household', role: 'Owner' }],
+    });
     await signingIn;
 
     expect(auth.user()).toEqual({ id: 7, email: 'owner@example.com', name: 'Owner' });
+    expect(auth.profiles()).toEqual([{ id: 3, name: 'Household', role: 'Owner' }]);
     expect(sessionStorage.getItem('financegoals.idToken')).toBe(credential);
   });
 
@@ -63,7 +67,9 @@ describe('Sign-in', () => {
 
   it('sends the token only to our API, and a 401 signs out', async () => {
     const signingIn = auth.signIn(token(3600));
-    http.expectOne('/api/me').flush({ id: 7, email: 'owner@example.com', name: null });
+    http
+      .expectOne('/api/me')
+      .flush({ user: { id: 7, email: 'owner@example.com', name: null }, profiles: [] });
     await signingIn;
     const client = TestBed.inject(HttpClient);
 
