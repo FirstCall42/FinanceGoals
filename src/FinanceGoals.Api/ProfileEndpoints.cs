@@ -7,6 +7,9 @@ namespace FinanceGoals.Api;
 /// <summary>An endpoint that only a profile's Owners may use; the rest need any member.</summary>
 internal sealed class OwnerOnly;
 
+/// <summary>On every endpoint of the profile group, so tests can tell it passes the membership filter.</summary>
+internal sealed class ProfileScoped;
+
 /// <summary>
 /// Everything under /api/profiles/{profileId} (#25). The group checks the caller's role first: someone
 /// who isn't a member gets 404, as if the profile didn't exist (#27), and a Member calling an
@@ -23,6 +26,7 @@ internal static class ProfileEndpoints
     public static RouteGroupBuilder MapProfiles(this IEndpointRouteBuilder app)
     {
         var profile = app.MapGroup("/api/profiles/{profileId:int}");
+        profile.WithMetadata(new ProfileScoped());
         profile.AddEndpointFilter(async (context, next) =>
         {
             var http = context.HttpContext;

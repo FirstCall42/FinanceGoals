@@ -3,16 +3,23 @@ extern alias migrator;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.RegularExpressions;
 using FinanceGoals.Application.Profiles;
 using FinanceGoals.Migrator.Tests;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.DependencyInjection;
 using migrator::FinanceGoals.Migrator;
 
 namespace FinanceGoals.Api.Tests;
 
 [TestClass]
-public sealed class ProfileTests
+public sealed partial class ProfileTests
 {
+    private const string _profileGroup = "/api/profiles/{profileId:int}";
+
     private static string _database = string.Empty;
     private static ApiFactory? _api;
 
@@ -110,12 +117,58 @@ public sealed class ProfileTests
     }
 
     [TestMethod]
+    public void Every_endpoint_is_public_on_purpose_or_inside_the_profile_group()
+    {
+        // A new endpoint for a profile's data must go in the /api/profiles/{profileId} group, whose
+        // filter checks membership. The group marks its endpoints with ProfileScoped, so this goes by
+        // group membership, not by route text: an endpoint mapped on app with a profile-like route fails.
+        string[] publicOnPurpose = ["/health/live", "/health/ready", "/api/currencies", "/api/loans/calculate", "/api/auth/config"];
+
+        var outside = Endpoints()
+            .Where(e => e.Metadata.GetMetadata<ProfileScoped>() is null)
+            .Select(e => (Route: e.RoutePattern.RawText!, Anonymous: e.Metadata.GetMetadata<IAllowAnonymous>() is not null))
+            .ToList();
+
+        outside.Where(e => e.Anonymous).Select(e => e.Route).ShouldBeSubsetOf(publicOnPurpose);
+        outside.Where(e => !e.Anonymous).Select(e => e.Route).ShouldBe(["/api/me"]);
+    }
+
+    [TestMethod]
+    public async Task A_member_of_another_profile_gets_not_found_on_every_profile_endpoint()
+    {
+        var profileId = (await SignInAsync("owner-d")).Profiles[0].Id;
+        await SignInAsync("stranger-d");
+
+        var endpoints = Endpoints().Where(e => e.Metadata.GetMetadata<ProfileScoped>() is not null).ToList();
+
+        endpoints.ShouldNotBeEmpty();
+        endpoints.ShouldAllBe(e => e.RoutePattern.RawText!.StartsWith(_profileGroup, StringComparison.Ordinal));
+        foreach (var endpoint in endpoints)
+        {
+            var path = endpoint.RoutePattern.RawText!.Replace(_profileGroup, $"/api/profiles/{profileId}", StringComparison.Ordinal);
+            // Any other route parameter gets a plausible id; the membership check comes first anyway.
+            path = RouteParameter().Replace(path, "1");
+            foreach (var method in endpoint.Metadata.GetMetadata<IHttpMethodMetadata>()!.HttpMethods)
+            {
+                var body = method is "GET" or "DELETE" ? null : new { };
+                (await SendAsync(new HttpMethod(method), path, "stranger-d", body)).StatusCode.ShouldBe(HttpStatusCode.NotFound, $"{method} {path}");
+            }
+        }
+    }
+
+    [TestMethod]
     public async Task Profile_endpoints_need_a_signed_in_user()
     {
         var response = await _api!.CreateClient().GetAsync(new Uri("/api/profiles/1", UriKind.Relative));
 
         response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
+
+    private static List<RouteEndpoint> Endpoints() =>
+        _api!.Services.GetRequiredService<EndpointDataSource>().Endpoints.OfType<RouteEndpoint>().ToList();
+
+    [GeneratedRegex(@"{[^}]+}")]
+    private static partial Regex RouteParameter();
 
     // Until invitations exist (#26), members are added directly.
     private static async Task AddMemberAsync(int profileId, int userId)
