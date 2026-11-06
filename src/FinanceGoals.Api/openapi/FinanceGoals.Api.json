@@ -96,7 +96,7 @@
         "tags": [
           "FinanceGoals.Api"
         ],
-        "summary": "Records the sign-in of the Google account in the bearer token and returns the user.",
+        "summary": "Records the sign-in of the Google account in the bearer token; returns the user and their profiles, creating one on the first sign-in.",
         "operationId": "SignIn",
         "responses": {
           "200": {
@@ -104,7 +104,87 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/User"
+                  "$ref": "#/components/schemas/SignedIn"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/profiles/{profileId}": {
+      "get": {
+        "tags": [
+          "FinanceGoals.Api"
+        ],
+        "summary": "The profile, with the caller's role in it.",
+        "operationId": "GetProfile",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileSummary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "FinanceGoals.Api"
+        ],
+        "summary": "Renames the profile. Owners only.",
+        "operationId": "RenameProfile",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenameProfile"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/profiles/{profileId}/members": {
+      "get": {
+        "tags": [
+          "FinanceGoals.Api"
+        ],
+        "summary": "The profile's members and their roles.",
+        "operationId": "ListProfileMembers",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ProfileMember"
+                  }
                 }
               }
             }
@@ -396,6 +476,70 @@
         },
         "description": "An extra repayment with every payment from a date, optionally until a date."
       },
+      "ProfileMember": {
+        "required": [
+          "userId",
+          "email",
+          "name",
+          "role"
+        ],
+        "type": "object",
+        "properties": {
+          "userId": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "email": {
+            "type": "string"
+          },
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "role": {
+            "$ref": "#/components/schemas/ProfileRole"
+          }
+        },
+        "description": "A member of a profile."
+      },
+      "ProfileRole": {
+        "enum": [
+          "Member",
+          "Owner"
+        ],
+        "description": "What a user may do in a profile. Owners also manage the profile and its members."
+      },
+      "ProfileSummary": {
+        "required": [
+          "id",
+          "name",
+          "role"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "name": {
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/ProfileRole"
+          }
+        },
+        "description": "A profile as one of its members sees it."
+      },
       "RateChangeInput": {
         "required": [
           "from",
@@ -417,6 +561,21 @@
           }
         },
         "description": "A rate change: the nominal annual rate in percent (5.24 is 5.24 %) from a date."
+      },
+      "RenameProfile": {
+        "required": [
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "A new name for a profile."
       },
       "ScheduleRow": {
         "required": [
@@ -551,6 +710,25 @@
           }
         },
         "description": "When a schedule ends and what it costs."
+      },
+      "SignedIn": {
+        "required": [
+          "user",
+          "profiles"
+        ],
+        "type": "object",
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/User"
+          },
+          "profiles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProfileSummary"
+            }
+          }
+        },
+        "description": "The signed-in user and the profiles they belong to."
       },
       "SignInConfig": {
         "required": [

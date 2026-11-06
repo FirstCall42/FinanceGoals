@@ -39,12 +39,12 @@ public sealed class SignInTests
         var other = await client.SendAsync(SignIn(TestTokens.For(subject: "google-subject-2")));
 
         first.StatusCode.ShouldBe(HttpStatusCode.OK);
-        var firstUser = (await first.Content.ReadFromJsonAsync<User>()).ShouldNotBeNull();
+        var firstUser = (await first.Content.ReadFromJsonAsync<SignedIn>()).ShouldNotBeNull().User;
         firstUser.Email.ShouldBe("old@example.com");
         firstUser.Name.ShouldBe("Old name");
-        var againUser = (await again.Content.ReadFromJsonAsync<User>()).ShouldNotBeNull();
+        var againUser = (await again.Content.ReadFromJsonAsync<SignedIn>()).ShouldNotBeNull().User;
         againUser.ShouldBe(new User(firstUser.Id, "new@example.com", null));
-        (await other.Content.ReadFromJsonAsync<User>()).ShouldNotBeNull().Id.ShouldNotBe(firstUser.Id);
+        (await other.Content.ReadFromJsonAsync<SignedIn>()).ShouldNotBeNull().User.Id.ShouldNotBe(firstUser.Id);
     }
 
     [TestMethod]

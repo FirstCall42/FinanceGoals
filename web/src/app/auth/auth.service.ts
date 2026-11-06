@@ -4,11 +4,18 @@ import { firstValueFrom } from 'rxjs';
 import { AppConfig } from '../config/app-config';
 import { GoogleIdentity, loadGoogleIdentity, tokenExpiry } from './google-identity';
 
-/** The signed-in person, as POST /api/me returns them. */
+/** The signed-in person. */
 export interface User {
   readonly id: number;
   readonly email: string;
   readonly name: string | null;
+}
+
+/** A household profile the person belongs to, and their role in it. */
+export interface Profile {
+  readonly id: number;
+  readonly name: string;
+  readonly role: 'Owner' | 'Member';
 }
 
 const storageKey = 'financegoals.idToken';
@@ -27,6 +34,8 @@ export class AuthService {
 
   readonly token = signal<string | undefined>(undefined);
   readonly user = signal<User | undefined>(undefined);
+  /** The person's profiles; a first sign-in creates one. */
+  readonly profiles = signal<readonly Profile[]>([]);
   /** False until the client ID is known; stays false when sign-in is not set up. */
   readonly available = signal(false);
   readonly error = signal<string | undefined>(undefined);
@@ -59,6 +68,7 @@ export class AuthService {
   clear(): void {
     this.token.set(undefined);
     this.user.set(undefined);
+    this.profiles.set([]);
     try {
       sessionStorage.removeItem(storageKey);
     } catch {
@@ -75,8 +85,11 @@ export class AuthService {
 
     this.token.set(credential);
     try {
-      const user = await firstValueFrom(this.http.post<User>(this.config.apiUrl('/api/me'), null));
-      this.user.set(user);
+      const signedIn = await firstValueFrom(
+        this.http.post<{ user: User; profiles: Profile[] }>(this.config.apiUrl('/api/me'), null),
+      );
+      this.user.set(signedIn.user);
+      this.profiles.set(signedIn.profiles);
       this.error.set(undefined);
       try {
         sessionStorage.setItem(storageKey, credential);
