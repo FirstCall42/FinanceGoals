@@ -120,11 +120,12 @@ public sealed partial class ProfileTests
     public void Every_endpoint_is_public_on_purpose_or_inside_the_profile_group()
     {
         // A new endpoint for a profile's data must go in the /api/profiles/{profileId} group, whose
-        // filter checks membership; nothing else may read or write profile data.
+        // filter checks membership. The group marks its endpoints with ProfileScoped, so this goes by
+        // group membership, not by route text: an endpoint mapped on app with a profile-like route fails.
         string[] publicOnPurpose = ["/health/live", "/health/ready", "/api/currencies", "/api/loans/calculate", "/api/auth/config"];
 
         var outside = Endpoints()
-            .Where(e => !e.RoutePattern.RawText!.StartsWith(_profileGroup, StringComparison.Ordinal))
+            .Where(e => e.Metadata.GetMetadata<ProfileScoped>() is null)
             .Select(e => (Route: e.RoutePattern.RawText!, Anonymous: e.Metadata.GetMetadata<IAllowAnonymous>() is not null))
             .ToList();
 
@@ -138,9 +139,10 @@ public sealed partial class ProfileTests
         var profileId = (await SignInAsync("owner-d")).Profiles[0].Id;
         await SignInAsync("stranger-d");
 
-        var endpoints = Endpoints().Where(e => e.RoutePattern.RawText!.StartsWith(_profileGroup, StringComparison.Ordinal)).ToList();
+        var endpoints = Endpoints().Where(e => e.Metadata.GetMetadata<ProfileScoped>() is not null).ToList();
 
         endpoints.ShouldNotBeEmpty();
+        endpoints.ShouldAllBe(e => e.RoutePattern.RawText!.StartsWith(_profileGroup, StringComparison.Ordinal));
         foreach (var endpoint in endpoints)
         {
             var path = endpoint.RoutePattern.RawText!.Replace(_profileGroup, $"/api/profiles/{profileId}", StringComparison.Ordinal);
