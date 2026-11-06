@@ -51,6 +51,15 @@ ConnectionStrings__App="Server=...;User ID=financegoals_app;..." dotnet run --pr
 
 The build writes the OpenAPI document to `src/FinanceGoals.Api/openapi/FinanceGoals.Api.json`. It is committed, so API changes show in the pull request diff.
 
+**Generated Angular client (#12).** `web/src/app/api` is generated from that document by [ng-openapi-gen](https://github.com/cyclosproject/ng-openapi-gen) (`web/ng-openapi-gen.json`): typed models and `HttpClient` functions for every endpoint. After an API change, build the API (which rewrites the OpenAPI document), then regenerate the client and commit both:
+
+```sh
+dotnet build src/FinanceGoals.Api
+cd web && npm run api:generate
+```
+
+`npm test` also runs `npm run api:check`, which regenerates into a temporary folder and compares it with the committed client, so CI fails a pull request whose client is out of date. The generated folder is excluded from Prettier and ESLint. Pages and services can use it for new calls; the older hand-written services move over as they are touched.
+
 Logs are JSON lines on standard output (Serilog), with levels set in the `Serilog` configuration section. Successful health probes are left out of the request log; failed ones are logged as errors.
 
 ## Web

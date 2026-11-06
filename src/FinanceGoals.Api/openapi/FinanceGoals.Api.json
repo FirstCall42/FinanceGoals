@@ -356,9 +356,6 @@
         "description": "The profile an accepted invite joined."
       },
       "AcceptInvite": {
-        "required": [
-          "token"
-        ],
         "type": "object",
         "properties": {
           "token": {
@@ -504,9 +501,6 @@
         }
       },
       "InviteMember": {
-        "required": [
-          "email"
-        ],
         "type": "object",
         "properties": {
           "email": {
@@ -1019,10 +1013,6 @@
         "description": "What the web app needs to show the Google sign-in button."
       },
       "UpdateProfile": {
-        "required": [
-          "name",
-          "mainCurrency"
-        ],
         "type": "object",
         "properties": {
           "name": {
