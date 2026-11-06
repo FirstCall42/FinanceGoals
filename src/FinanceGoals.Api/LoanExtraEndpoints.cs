@@ -156,7 +156,7 @@ internal static class LoanExtraEndpoints
 
                 if (date < loan.Start || date > DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime).AddDays(1))
                 {
-                    return Problem("date", $"The balance date must be between {loan.Start:yyyy-MM-dd} (paid out) and today.");
+                    return Problem("date", $"The balance date must be between {loan.Start:yyyy-MM-dd} (paid out) and tomorrow.");
                 }
 
                 return await Result(await extras.SaveBalanceAsync(access.ProfileId, loanId, date, amount, access.UserId, cancellationToken), access.ProfileId, loanId, loans, extras, cancellationToken);
