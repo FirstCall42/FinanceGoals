@@ -29,3 +29,11 @@ export type { CreateAccount$Params as CreateAccount$Params } from './fn/finance-
 export { createAccount as createAccount } from './fn/finance-goals-api/create-account';
 export type { UpdateAccount$Params as UpdateAccount$Params } from './fn/finance-goals-api/update-account';
 export { updateAccount as updateAccount } from './fn/finance-goals-api/update-account';
+export type { ListAccountValues$Params as ListAccountValues$Params } from './fn/finance-goals-api/list-account-values';
+export { listAccountValues as listAccountValues } from './fn/finance-goals-api/list-account-values';
+export type { SaveSnapshot$Params as SaveSnapshot$Params } from './fn/finance-goals-api/save-snapshot';
+export { saveSnapshot as saveSnapshot } from './fn/finance-goals-api/save-snapshot';
+export type { DeleteSnapshot$Params as DeleteSnapshot$Params } from './fn/finance-goals-api/delete-snapshot';
+export { deleteSnapshot as deleteSnapshot } from './fn/finance-goals-api/delete-snapshot';
+export type { DeleteAccountValue$Params as DeleteAccountValue$Params } from './fn/finance-goals-api/delete-account-value';
+export { deleteAccountValue as deleteAccountValue } from './fn/finance-goals-api/delete-account-value';

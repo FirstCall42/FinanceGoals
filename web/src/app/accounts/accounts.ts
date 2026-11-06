@@ -313,7 +313,7 @@ export class Accounts {
 
   protected startEdit(account: Account): void {
     this.edit.set({ name: account.name, type: account.type, currencyCode: account.currencyCode });
-    this.editing.set(Number(account.id));
+    this.editing.set(account.id);
   }
 
   protected async saveEdit(account: Account): Promise<void> {
@@ -324,7 +324,7 @@ export class Accounts {
 
     const e = this.edit();
     await this.run(async () => {
-      await this.service.update(p.id, Number(account.id), {
+      await this.service.update(p.id, account.id, {
         name: e.name.trim(),
         type: e.type,
         currencyCode: e.currencyCode,
@@ -341,7 +341,7 @@ export class Accounts {
     }
 
     await this.run(async () => {
-      await this.service.update(p.id, Number(account.id), { archived });
+      await this.service.update(p.id, account.id, { archived });
       await this.load(p.id, this.showArchived());
     });
   }
