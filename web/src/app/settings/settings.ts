@@ -116,13 +116,16 @@ export class Settings {
       return;
     }
 
+    const select = event.target as HTMLSelectElement;
     this.saving.set(true);
     this.error.set(undefined);
     try {
-      await this.profiles.setMainCurrency(profile.id, (event.target as HTMLSelectElement).value);
+      await this.profiles.setMainCurrency(profile.id, select.value);
       await this.auth.refresh();
       this.display.reset();
     } catch (error) {
+      // Show what is stored again, not the currency that didn't save.
+      select.value = this.display.main();
       this.error.set(messageOf(error));
     } finally {
       this.saving.set(false);
