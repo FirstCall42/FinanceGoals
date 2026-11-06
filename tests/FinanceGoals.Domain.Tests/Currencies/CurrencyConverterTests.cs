@@ -95,6 +95,21 @@ public sealed class CurrencyConverterTests
     }
 
     [TestMethod]
+    public void A_rate_more_than_8_days_old_is_flagged()
+    {
+        // Latest rates are from 5 November. On the 13th they are 8 days old: fine. On the 14th: stale.
+        var fresh = Converted(new Money(100m, _eur), _nok, new DateOnly(2026, 11, 13));
+        var stale = Converted(new Money(100m, _eur), _nok, new DateOnly(2026, 11, 14));
+
+        fresh.IsStale.ShouldBeFalse();
+        fresh.Warning.ShouldBeNull();
+        stale.IsStale.ShouldBeTrue();
+        stale.Warning.ShouldBe("The exchange rate is from 2026-11-05, more than 8 days old.");
+        stale.Amount.ShouldBe(new Money(1165m, _nok)); // still converted, with the warning
+        Converted(new Money(1m, _ron), _ron, new DateOnly(2030, 1, 1)).IsStale.ShouldBeFalse(); // no rate used
+    }
+
+    [TestMethod]
     public void Two_definitions_of_the_same_code_are_never_converted()
     {
         Should.Throw<CurrencyMismatchException>(() => _converter.Convert(new Money(1m, _nok), new Currency("NOK", 3), _nov5));
