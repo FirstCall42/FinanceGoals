@@ -1,6 +1,6 @@
 import { Component, computed, inject, input, signal } from '@angular/core';
 import { MoneyPipe } from '../money/money.pipe';
-import { ComparisonResult, compareExtraAndInvest } from './extra-vs-invest';
+import { ComparisonResult, compareExtraAndInvest, returnSpreadPoints } from './extra-vs-invest';
 import { LoanCalculatorService } from './loan-calculator.service';
 import { LoanInput, parseNumber, toRequest } from './loan-input';
 
@@ -58,8 +58,8 @@ const pad = { left: 8, right: 8, top: 22, bottom: 20 };
       }
       @if (result(); as r) {
         <p>
-          The loan is paid off {{ r.standardPayoff }} without extra payments and
-          {{ r.extraPayoff }} with them. The return is a guess, so the low and high cases are
+          The loan is paid off {{ date(r.standardPayoff) }} without extra payments and
+          {{ date(r.extraPayoff) }} with them. The return is a guess, so the low and high cases are
           {{ spread }} percentage points either side. Positive means extra payments come out ahead.
         </p>
         @if (shape(); as s) {
@@ -99,9 +99,9 @@ const pad = { left: 8, right: 8, top: 22, bottom: 20 };
                 <tr>
                   <th scope="row">{{ c.label }} ({{ c.yearlyPercent }} %)</th>
                   @for (a of c.after; track a.years) {
-                    <td class="fg-amount">{{ a.difference | money: currency() : minorUnits() }}</td>
+                    <td class="fg-amount">{{ a.difference | money: r.currency : r.units }}</td>
                   }
-                  <td class="fg-amount">{{ c.atPayoff | money: currency() : minorUnits() }}</td>
+                  <td class="fg-amount">{{ c.atPayoff | money: r.currency : r.units }}</td>
                 </tr>
               }
             </tbody>
@@ -172,9 +172,11 @@ export class ExtraVsInvest {
   protected readonly horizon = signal('20');
   protected readonly busy = signal(false);
   protected readonly error = signal<string | undefined>(undefined);
-  protected readonly result = signal<ComparisonResult | undefined>(undefined);
-  protected readonly currency = computed(() => this.loan().currency);
-  protected readonly spread = 2;
+  /** The comparison with the currency it was made in, so it stays right when the form changes. */
+  protected readonly result = signal<
+    (ComparisonResult & { currency: string; units: number }) | undefined
+  >(undefined);
+  protected readonly spread = returnSpreadPoints;
   protected readonly w = width;
   protected readonly h = height;
 
@@ -197,6 +199,10 @@ export class ExtraVsInvest {
       invest: line((p) => p.invest),
     };
   });
+
+  protected date(value: string): string {
+    return new Date(`${value}T00:00:00Z`).toLocaleDateString('nb-NO', { timeZone: 'UTC' });
+  }
 
   protected text(event: Event): string {
     return (event.target as HTMLInputElement).value;
@@ -244,8 +250,8 @@ export class ExtraVsInvest {
     }
 
     this.error.set(undefined);
-    this.result.set(
-      compareExtraAndInvest({
+    this.result.set({
+      ...compareExtraAndInvest({
         standard: outcome.result.withoutExtraSchedule,
         withExtra: outcome.result.withExtraSchedule,
         amount,
@@ -254,6 +260,8 @@ export class ExtraVsInvest {
         horizonYears: years,
         minorUnits: this.minorUnits(),
       }),
-    );
+      currency: loan.currency,
+      units: this.minorUnits(),
+    });
   }
 }

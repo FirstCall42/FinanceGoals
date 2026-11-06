@@ -57,6 +57,13 @@ describe('Extra payments or investing panel', () => {
       expect(element.textContent).toContain('Low (4 %)');
     });
 
+    // Changing the form's currency afterwards does not relabel the shown figures.
+    fixture.componentRef.setInput('loan', {
+      ...defaultInput(new Date(2026, 0, 20)),
+      currency: 'USD',
+    });
+    fixture.detectChanges();
+    expect(element.textContent).not.toContain('USD');
     expect(element.textContent).toContain('Expected (6 %)');
     expect(element.textContent).toContain('High (8 %)');
     expect(element.querySelectorAll('polyline').length).toBe(2);
