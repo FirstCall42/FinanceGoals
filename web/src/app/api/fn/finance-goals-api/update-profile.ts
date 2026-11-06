@@ -10,12 +10,18 @@ import { RequestBuilder } from '../../request-builder';
 import { UpdateProfile } from '../../models/update-profile';
 
 export interface UpdateProfile$Params {
+
+/**
+ * The household profile; the caller must be a member (404 otherwise).
+ */
+  profileId: number;
       body: UpdateProfile
 }
 
 export function updateProfile(http: HttpClient, rootUrl: string, params: UpdateProfile$Params, context?: HttpContext): Observable<StrictHttpResponse<void>> {
   const rb = new RequestBuilder(rootUrl, updateProfile.PATH, 'patch');
   if (params) {
+    rb.path('profileId', params.profileId, {});
     rb.body(params.body, 'application/json');
   }
 

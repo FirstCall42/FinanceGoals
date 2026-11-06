@@ -1,7 +1,9 @@
+using FinanceGoals.Application.Accounts;
 using FinanceGoals.Application.Currencies;
 using FinanceGoals.Application.Profiles;
 using FinanceGoals.Application.Users;
 using FinanceGoals.Domain.Currencies;
+using FinanceGoals.Infrastructure.Accounts;
 using FinanceGoals.Infrastructure.Currencies;
 using FinanceGoals.Infrastructure.Health;
 using FinanceGoals.Infrastructure.Profiles;
@@ -29,6 +31,7 @@ public static class InfrastructureServices
         services.AddSingleton<IAppUserStore, SqlAppUserStore>();
         services.AddSingleton<IProfileStore, SqlProfileStore>();
         services.AddSingleton<IProfileInviteStore, SqlProfileInviteStore>();
+        services.AddSingleton<IAccountStore, SqlAccountStore>();
         services.AddSingleton<SqlExchangeRateStore>();
         services.AddSingleton<IExchangeRateStore>(provider => provider.GetRequiredService<SqlExchangeRateStore>());
         services.AddSingleton<IEurRates>(provider => provider.GetRequiredService<SqlExchangeRateStore>());

@@ -10,11 +10,17 @@ import { RequestBuilder } from '../../request-builder';
 import { PendingInvite } from '../../models/pending-invite';
 
 export interface ListInvites$Params {
+
+/**
+ * The household profile; the caller must be a member (404 otherwise).
+ */
+  profileId: number;
 }
 
-export function listInvites(http: HttpClient, rootUrl: string, params?: ListInvites$Params, context?: HttpContext): Observable<StrictHttpResponse<Array<PendingInvite>>> {
+export function listInvites(http: HttpClient, rootUrl: string, params: ListInvites$Params, context?: HttpContext): Observable<StrictHttpResponse<Array<PendingInvite>>> {
   const rb = new RequestBuilder(rootUrl, listInvites.PATH, 'get');
   if (params) {
+    rb.path('profileId', params.profileId, {});
   }
 
   return http.request(

@@ -11,12 +11,18 @@ import { CreatedInvite } from '../../models/created-invite';
 import { InviteMember } from '../../models/invite-member';
 
 export interface InviteMember$Params {
+
+/**
+ * The household profile; the caller must be a member (404 otherwise).
+ */
+  profileId: number;
       body: InviteMember
 }
 
 export function inviteMember(http: HttpClient, rootUrl: string, params: InviteMember$Params, context?: HttpContext): Observable<StrictHttpResponse<CreatedInvite>> {
   const rb = new RequestBuilder(rootUrl, inviteMember.PATH, 'post');
   if (params) {
+    rb.path('profileId', params.profileId, {});
     rb.body(params.body, 'application/json');
   }
 

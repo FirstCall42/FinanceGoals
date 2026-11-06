@@ -8,15 +8,15 @@ public sealed class SchemaSnapshotTests
         CREATE TABLE app.Pair (A int NULL, B int NULL, Note varchar(20) NULL, Doc xml NULL);
         CREATE TABLE app.Empty (P int NULL, Q int NULL, S AS (P + Q));
         INSERT INTO app.Pair (A, B, Note, Doc) VALUES (1, 2, 'x', N'<a>1</a>');
-        CREATE TABLE app.Account (Id int NOT NULL CONSTRAINT PK_Account PRIMARY KEY,
-            CurrencyCode char(3) NOT NULL CONSTRAINT FK_Account_Currency REFERENCES app.Currency (Code),
-            CONSTRAINT CK_Account_Id CHECK (Id > 0));
-        EXEC (N'CREATE TRIGGER app.TR_Account ON app.Account AFTER INSERT AS SET NOCOUNT ON;');
+        CREATE TABLE app.Probe (Id int NOT NULL CONSTRAINT PK_Probe PRIMARY KEY,
+            CurrencyCode char(3) NOT NULL CONSTRAINT FK_Probe_Currency REFERENCES app.Currency (Code),
+            CONSTRAINT CK_Probe_Id CHECK (Id > 0));
+        EXEC (N'CREATE TRIGGER app.TR_Probe ON app.Probe AFTER INSERT AS SET NOCOUNT ON;');
         EXEC (N'CREATE SCHEMA other AUTHORIZATION dbo');
-        EXEC (N'CREATE TABLE other.Account (Id int NULL)');
+        EXEC (N'CREATE TABLE other.Probe (Id int NULL)');
         CREATE USER reader WITHOUT LOGIN;
         GRANT SELECT ON app.Pair (A) TO reader;
-        GRANT SELECT ON app.Account TO reader;
+        GRANT SELECT ON app.Probe TO reader;
         """;
 
     [TestMethod]
@@ -29,19 +29,19 @@ public sealed class SchemaSnapshotTests
     // Constraints, indexes, triggers and code
     [DataRow("CREATE INDEX IX_Currency_Name ON app.Currency (Name);")]
     [DataRow("ALTER TABLE app.Currency ADD CONSTRAINT CK_Currency_Code CHECK (LEN(Code) = 3);")]
-    [DataRow("ALTER TABLE app.Account NOCHECK CONSTRAINT CK_Account_Id;")]
-    [DataRow("ALTER TABLE app.Account NOCHECK CONSTRAINT FK_Account_Currency;")]
-    [DataRow("ALTER TABLE app.Account DROP CONSTRAINT FK_Account_Currency; ALTER TABLE app.Account ADD CONSTRAINT FK_Account_Currency FOREIGN KEY (CurrencyCode) REFERENCES app.Currency (Code) ON UPDATE CASCADE;")]
-    [DataRow("ALTER TABLE app.Account DROP CONSTRAINT FK_Account_Currency; ALTER TABLE app.Account WITH NOCHECK ADD CONSTRAINT FK_Account_Currency FOREIGN KEY (CurrencyCode) REFERENCES app.Currency (Code);")]
-    [DataRow("DISABLE TRIGGER app.TR_Account ON app.Account;")]
-    [DataRow("EXEC (N'ALTER TRIGGER app.TR_Account ON app.Account AFTER INSERT AS SET NOCOUNT OFF;');")]
+    [DataRow("ALTER TABLE app.Probe NOCHECK CONSTRAINT CK_Probe_Id;")]
+    [DataRow("ALTER TABLE app.Probe NOCHECK CONSTRAINT FK_Probe_Currency;")]
+    [DataRow("ALTER TABLE app.Probe DROP CONSTRAINT FK_Probe_Currency; ALTER TABLE app.Probe ADD CONSTRAINT FK_Probe_Currency FOREIGN KEY (CurrencyCode) REFERENCES app.Currency (Code) ON UPDATE CASCADE;")]
+    [DataRow("ALTER TABLE app.Probe DROP CONSTRAINT FK_Probe_Currency; ALTER TABLE app.Probe WITH NOCHECK ADD CONSTRAINT FK_Probe_Currency FOREIGN KEY (CurrencyCode) REFERENCES app.Currency (Code);")]
+    [DataRow("DISABLE TRIGGER app.TR_Probe ON app.Probe;")]
+    [DataRow("EXEC (N'ALTER TRIGGER app.TR_Probe ON app.Probe AFTER INSERT AS SET NOCOUNT OFF;');")]
     [DataRow("EXEC (N'CREATE VIEW app.CurrencyCodes AS SELECT Code FROM app.Currency');")]
     // Ownership and security
     [DataRow("ALTER AUTHORIZATION ON SCHEMA::other TO reader;")]
     [DataRow("ALTER AUTHORIZATION ON OBJECT::app.Empty TO reader;")]
     [DataRow("GRANT VIEW DEFINITION TO app_data;")]
     [DataRow("REVOKE SELECT ON app.Pair (A) FROM reader; GRANT SELECT ON app.Pair (B) TO reader;")]
-    [DataRow("REVOKE SELECT ON app.Account FROM reader; GRANT SELECT ON other.Account TO reader;")]
+    [DataRow("REVOKE SELECT ON app.Probe FROM reader; GRANT SELECT ON other.Probe TO reader;")]
     [DataRow("CREATE USER extra WITHOUT LOGIN;")]
     // Data and journals
     // Case only: the snapshot must see a change a case-insensitive comparison would miss.
