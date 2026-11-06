@@ -41,6 +41,14 @@ export type { GetNetWorth$Params as GetNetWorth$Params } from './fn/finance-goal
 export { getNetWorth as getNetWorth } from './fn/finance-goals-api/get-net-worth';
 export type { GetNetWorthHistory$Params as GetNetWorthHistory$Params } from './fn/finance-goals-api/get-net-worth-history';
 export { getNetWorthHistory as getNetWorthHistory } from './fn/finance-goals-api/get-net-worth-history';
+export type { GetBalanceForecast$Params as GetBalanceForecast$Params } from './fn/finance-goals-api/get-balance-forecast';
+export { getBalanceForecast as getBalanceForecast } from './fn/finance-goals-api/get-balance-forecast';
+export type { ListAccountAssumptions$Params as ListAccountAssumptions$Params } from './fn/finance-goals-api/list-account-assumptions';
+export { listAccountAssumptions as listAccountAssumptions } from './fn/finance-goals-api/list-account-assumptions';
+export type { SaveAccountAssumption$Params as SaveAccountAssumption$Params } from './fn/finance-goals-api/save-account-assumption';
+export { saveAccountAssumption as saveAccountAssumption } from './fn/finance-goals-api/save-account-assumption';
+export type { DeleteAccountAssumption$Params as DeleteAccountAssumption$Params } from './fn/finance-goals-api/delete-account-assumption';
+export { deleteAccountAssumption as deleteAccountAssumption } from './fn/finance-goals-api/delete-account-assumption';
 export type { ListLoans$Params as ListLoans$Params } from './fn/finance-goals-api/list-loans';
 export { listLoans as listLoans } from './fn/finance-goals-api/list-loans';
 export type { CreateLoan$Params as CreateLoan$Params } from './fn/finance-goals-api/create-loan';

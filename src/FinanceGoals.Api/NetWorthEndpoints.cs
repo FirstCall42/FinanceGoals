@@ -61,7 +61,7 @@ internal static class NetWorthEndpoints
 
     private static DateOnly Today(TimeProvider clock) => DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime);
 
-    private sealed record Context(
+    internal sealed record Context(
         Currency Target,
         IReadOnlyList<Account> Accounts,
         IReadOnlyList<AccountValue> Values,
@@ -70,7 +70,7 @@ internal static class NetWorthEndpoints
         Dictionary<string, string[]>? Error);
 
     /// <summary>Everything a net worth calculation needs for one request, with all rates read in one query.</summary>
-    private static async Task<Context> LoadAsync(
+    internal static async Task<Context> LoadAsync(
         string? currency, DateOnly upTo, HttpContext http, IProfileStore profiles, IAccountStore accounts, IAccountValueStore values,
         ICurrencyCatalog currencies, IRateHistory rates, CancellationToken cancellationToken)
     {
