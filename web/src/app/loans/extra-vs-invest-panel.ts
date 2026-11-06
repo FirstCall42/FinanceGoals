@@ -1,4 +1,5 @@
 import { Component, computed, inject, input, signal } from '@angular/core';
+import { formatDate } from '../date/date-field';
 import { MoneyPipe } from '../money/money.pipe';
 import { ComparisonResult, compareExtraAndInvest, returnSpreadPoints } from './extra-vs-invest';
 import { LoanCalculatorService } from './loan-calculator.service';
@@ -202,7 +203,7 @@ export class ExtraVsInvest {
   });
 
   protected date(value: string): string {
-    return new Date(`${value}T00:00:00Z`).toLocaleDateString('nb-NO', { timeZone: 'UTC' });
+    return formatDate(value);
   }
 
   protected text(event: Event): string {

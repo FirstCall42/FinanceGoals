@@ -1,5 +1,5 @@
-import { DateField } from '../date/date-field';
 import { Component, computed, effect, inject, signal } from '@angular/core';
+import { DateField, formatDate } from '../date/date-field';
 import { AuthService } from '../auth/auth.service';
 import { CurrencyService } from '../currency/currency.service';
 import { parseNumber } from '../loans/loan-input';
@@ -333,13 +333,18 @@ export class Balances {
   }
 
   protected formatDate(iso: string): string {
-    return new Date(`${iso}T00:00:00Z`).toLocaleDateString('nb-NO', { timeZone: 'UTC' });
+    return formatDate(iso);
   }
 
   protected async save(event: Event): Promise<void> {
     event.preventDefault();
     const p = this.profile();
     if (!p) {
+      return;
+    }
+
+    if (!this.date()) {
+      this.error.set('Enter a valid date as dd.mm.yyyy, not in the future.');
       return;
     }
 

@@ -1,5 +1,5 @@
-import { DateField } from '../date/date-field';
 import { Component, computed, effect, inject, signal } from '@angular/core';
+import { DateField, formatDate } from '../date/date-field';
 import { accountTypes } from '../accounts/account.service';
 import { AuthService } from '../auth/auth.service';
 import { CurrencyService } from '../currency/currency.service';
@@ -347,7 +347,7 @@ export class NetWorthPage {
   }
 
   protected formatDate(iso: string): string {
-    return new Date(`${iso}T00:00:00Z`).toLocaleDateString('nb-NO', { timeZone: 'UTC' });
+    return formatDate(iso);
   }
 
   private async load(profileId: number, currency: string, date: string): Promise<void> {

@@ -1,4 +1,5 @@
 import { Component, computed, effect, inject, signal } from '@angular/core';
+import { formatDate } from '../date/date-field';
 import { AuthService } from '../auth/auth.service';
 import { CreatedInvite, Member, PendingInvite, ProfileService, messageOf } from './profile.service';
 
@@ -192,7 +193,7 @@ export class HouseholdSettings {
   }
 
   protected date(iso: string): string {
-    return new Date(iso).toLocaleDateString('nb-NO');
+    return formatDate(iso);
   }
 
   protected async invite(event: Event): Promise<void> {

@@ -18,7 +18,7 @@ import { Component, ElementRef, computed, input, model, signal, viewChild } from
         [attr.aria-invalid]="invalid() ? 'true' : null"
         [value]="shown()"
         (input)="type($event)"
-        (blur)="typing.set(undefined)"
+        (blur)="leave()"
       />
       <button type="button" class="pick" aria-label="Pick a date" (click)="pick()">
         <svg
@@ -100,10 +100,12 @@ export class DateField {
   readonly max = input<string | undefined>(undefined);
 
   protected readonly typing = signal<string | undefined>(undefined);
-  protected readonly shown = computed(() => this.typing() ?? display(this.value()));
-  protected readonly invalid = computed(
-    () => this.typing() !== undefined && this.value() === '' && this.typing() !== '',
-  );
+  // What was typed stays while it is a date or not yet one; a date set from outside replaces it.
+  protected readonly shown = computed(() => {
+    const typed = this.typing();
+    return typed !== undefined && parse(typed) === this.value() ? typed : display(this.value());
+  });
+  protected readonly invalid = computed(() => this.value() === '' && (this.typing() ?? '') !== '');
   private readonly native = viewChild.required<ElementRef<HTMLInputElement>>('native');
 
   protected type(event: Event): void {
@@ -112,6 +114,13 @@ export class DateField {
     const iso = text.trim() === '' ? '' : parse(text);
     const limit = this.max();
     this.value.set(iso !== '' && limit && iso > limit ? '' : iso);
+  }
+
+  /** A valid date is shown in full form; text that is not a date stays so it can be fixed. */
+  protected leave(): void {
+    if (this.value() !== '') {
+      this.typing.set(undefined);
+    }
   }
 
   protected pick(): void {
@@ -134,6 +143,11 @@ export class DateField {
 export function display(iso: string): string {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
   return match ? `${match[3]}.${match[2]}.${match[1]}` : iso;
+}
+
+/** A date for display: dd.MM.yyyy. Takes an ISO date, or a timestamp (its UTC date). */
+export function formatDate(value: string): string {
+  return display(value.length > 10 ? new Date(value).toISOString().slice(0, 10) : value);
 }
 
 /** dd.MM.yyyy (also with / or -, and one-digit days and months) as yyyy-MM-dd, or empty if it is not a real date. */

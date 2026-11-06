@@ -1,6 +1,6 @@
 import { Component, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { DateField, display, parse } from './date-field';
+import { DateField, display, formatDate, parse } from './date-field';
 
 @Component({
   imports: [DateField],
@@ -53,6 +53,32 @@ describe('Date field', () => {
     type('31.02.2026');
     expect(host.date()).toBe('');
     expect(text.getAttribute('aria-invalid')).toBe('true');
+  });
+
+  it('shows every displayed date with zero-padded day and month', () => {
+    expect(formatDate('2026-03-05')).toBe('05.03.2026');
+    expect(formatDate('2026-11-07T22:30:00Z')).toBe('07.11.2026');
+  });
+
+  it('keeps text that is not a date, marked invalid, when leaving the field', () => {
+    const { fixture, text, type } = setup();
+
+    type('31.13.2030');
+    text.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    expect(text.value).toBe('31.13.2030');
+    expect(text.getAttribute('aria-invalid')).toBe('true');
+  });
+
+  it('writes a valid date in full form when leaving the field', () => {
+    const { fixture, text, type } = setup();
+
+    type('7.4.2026');
+    text.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+
+    expect(text.value).toBe('07.04.2026');
   });
 
   it('refuses a date after the latest allowed', () => {
