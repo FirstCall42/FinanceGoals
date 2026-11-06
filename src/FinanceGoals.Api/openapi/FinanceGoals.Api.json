@@ -356,9 +356,6 @@
         "description": "The profile an accepted invite joined."
       },
       "AcceptInvite": {
-        "required": [
-          "token"
-        ],
         "type": "object",
         "properties": {
           "token": {
@@ -504,9 +501,6 @@
         }
       },
       "InviteMember": {
-        "required": [
-          "email"
-        ],
         "type": "object",
         "properties": {
           "email": {

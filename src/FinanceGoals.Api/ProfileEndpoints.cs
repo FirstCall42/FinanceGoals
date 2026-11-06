@@ -134,10 +134,10 @@ internal static class ProfileEndpoints
 internal sealed record UpdateProfile(string? Name, string? MainCurrency);
 
 /// <summary>Whom to invite: the email address of their Google account.</summary>
-internal sealed record InviteMember(string? Email);
+internal sealed record InviteMember(string? Email = null);
 
 /// <summary>The profile an accepted invite joined.</summary>
 internal sealed record AcceptedInvite(int ProfileId);
 
 /// <summary>The token from an invite link.</summary>
-internal sealed record AcceptInvite(string? Token);
+internal sealed record AcceptInvite(string? Token = null);
