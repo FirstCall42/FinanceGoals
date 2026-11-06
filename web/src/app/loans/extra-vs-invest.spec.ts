@@ -60,20 +60,42 @@ describe('Extra payments or investing', () => {
     expect(result.extraPayoff <= result.standardPayoff).toBe(true);
   });
 
-  it('lets a higher return favour investing, and the deduction change the result', () => {
+  it('lets a higher return favour investing', () => {
     const standard = schedule(12000, 12, 0, 100);
     const withExtra = schedule(12000, 12, 1000, 50);
     const plain = compareExtraAndInvest({ ...base, standard, withExtra });
+    const grown = compareExtraAndInvest({ ...base, standard, withExtra, returnPercent: 10 });
+
+    expect(expected(grown).atPayoff).toBeLessThan(expected(plain).atPayoff);
+  });
+
+  it('credits the deduction on the interest of each case: only the interest saved is worth less', () => {
+    // 1 200 of interest on the standard schedule (12 x 100), 300 with extra payments (6 x 50).
+    const standard = schedule(12000, 12, 0, 100);
+    const withExtra = schedule(12000, 12, 1000, 50);
+    const plain = compareExtraAndInvest({ ...base, horizonYears: 1, standard, withExtra });
     const deducted = compareExtraAndInvest({
       ...base,
+      horizonYears: 1,
       standard,
       withExtra,
       taxDeductionPercent: 22,
     });
-    const grown = compareExtraAndInvest({ ...base, standard, withExtra, returnPercent: 10 });
 
-    expect(expected(grown).atPayoff).toBeLessThan(expected(plain).atPayoff);
-    expect(expected(deducted).atPayoff).not.toBe(expected(plain).atPayoff);
+    // 900 of interest saved; 22 % of the interest paid comes back in both cases: 900 - 0.22 x 900.
+    expect(expected(plain).atPayoff).toBe(900);
+    expect(expected(deducted).atPayoff).toBe(702);
+  });
+
+  it('shows the 5, 10 and 20 year columns only as far as the horizon reaches', () => {
+    const result = compareExtraAndInvest({
+      ...base,
+      horizonYears: 5,
+      standard: schedule(24000, 24),
+      withExtra: schedule(24000, 24, 1000),
+    });
+
+    expect(expected(result).after.map((a) => a.years)).toEqual([5]);
   });
 
   it('gives a low, expected and high case two percentage points apart', () => {

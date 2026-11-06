@@ -84,7 +84,7 @@ export function compareExtraAndInvest(input: ComparisonInput): ComparisonResult 
       label,
       yearlyPercent: percent,
       after: [5, 10, 20]
-        .filter((years) => years * 12 <= months)
+        .filter((years) => years * 12 <= Math.round(input.horizonYears * 12))
         .map((years) => ({ years, difference: at(years * 12) })),
       atPayoff: at(standard.length),
     };
