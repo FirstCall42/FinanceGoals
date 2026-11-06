@@ -37,6 +37,9 @@ internal sealed record LoanExtrasView(string CurrencyCode, IReadOnlyList<OneOffE
 /// <summary>Extra payments and actual balances of a stored loan (#137), in the household endpoint group.</summary>
 internal static class LoanExtraEndpoints
 {
+    // The most the tables hold (their CHECK constraints), so a larger figure is a 400, not a database error.
+    private const decimal _maxAmount = 1_000_000_000_000m;
+
     public static RouteGroupBuilder MapLoanExtras(this RouteGroupBuilder profile)
     {
         profile.MapGet("/loans/{loanId:int}/extras", async Task<ExtrasResult> (int loanId, HttpContext http, ILoanStore loans, ILoanExtraStore extras, CancellationToken cancellationToken) =>
@@ -72,6 +75,11 @@ internal static class LoanExtraEndpoints
                     return TypedResults.Conflict(new ProblemDetails { Title = "There is already an extra payment on that day.", Status = StatusCodes.Status409Conflict });
                 }
 
+                if (amount > _maxAmount)
+                {
+                    return Problem("amount", "The amount is too large.");
+                }
+
                 if (Check(current.Loan, current.Extras, c => (new ExtraPayment(date, new Money(amount, c)), null)) is { } error)
                 {
                     return Problem("extra", error);
@@ -105,6 +113,11 @@ internal static class LoanExtraEndpoints
                     return Problem("extra", "Give the amount and the day it starts.");
                 }
 
+                if (amount > _maxAmount)
+                {
+                    return Problem("amount", "The amount is too large.");
+                }
+
                 if (Check(current.Loan, current.Extras, c => (null, new MonthlyExtraPayment(new Money(amount, c), from, request.Until))) is { } error)
                 {
                     return Problem("extra", error);
@@ -136,7 +149,7 @@ internal static class LoanExtraEndpoints
 
                 var loan = stored.Loan;
                 var units = loan.Principal.Currency.MinorUnits;
-                if (request.Amount is not { } amount || amount < 0 || amount > 1_000_000_000_000m || decimal.Round(amount, units) != amount)
+                if (request.Amount is not { } amount || amount < 0 || amount > _maxAmount || decimal.Round(amount, units) != amount)
                 {
                     return Problem("amount", "The balance must be zero or more, in whole minor units (øre, cents).");
                 }
@@ -183,7 +196,7 @@ internal static class LoanExtraEndpoints
             LoanSchedule.Calculate(loan, new ExtraPayments(oneOff, monthly));
             return null;
         }
-        catch (Exception e) when (e is ArgumentException or InvalidOperationException or OverflowException)
+        catch (Exception e) when (e is ArgumentException or InvalidOperationException or OverflowException or NotSupportedException)
         {
             return e.Message;
         }
@@ -193,6 +206,11 @@ internal static class LoanExtraEndpoints
     private static async Task<ExtrasResult> Result(
         LoanExtraOutcome outcome, int profileId, int loanId, ILoanStore loans, ILoanExtraStore extras, CancellationToken cancellationToken)
     {
+        if (outcome == LoanExtraOutcome.Duplicate)
+        {
+            return TypedResults.Conflict(new ProblemDetails { Title = "There is already an extra payment on that day.", Status = StatusCodes.Status409Conflict });
+        }
+
         if (outcome == LoanExtraOutcome.NotFound
             || await loans.GetAsync(profileId, loanId, cancellationToken) is not { } stored
             || await extras.GetAsync(profileId, loanId, cancellationToken) is not { } all)

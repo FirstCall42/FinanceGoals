@@ -116,7 +116,43 @@ public sealed class LoanExtraTests
         (await SendAsync(HttpMethod.Put, $"{path}/balances/2025-12-31", "extra-owner-2", new { amount = 1m })).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         (await SendAsync(HttpMethod.Put, $"{path}/balances/2026-06-30", "extra-owner-2", new { amount = -1m })).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         (await SendAsync(HttpMethod.Put, $"{path}/balances/2026-06-30", "extra-owner-2", new { amount = 100.001m })).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await SendAsync(HttpMethod.Post, $"{path}/extras/one-off", "extra-owner-2", new { date = "2026-08-15", amount = 2_000_000_000_000m })).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await SendAsync(HttpMethod.Post, $"{path}/extras/monthly", "extra-owner-2", new { amount = 79_228_162_514_264_337_593_543_950_335m, from = "2026-08-01" })).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         (await SendAsync(HttpMethod.Put, $"{path}/balances/2099-06-30", "extra-owner-2", new { amount = 100m })).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [TestMethod]
+    public async Task Parallel_saves_of_one_balance_day_leave_one_row_and_no_errors()
+    {
+        var (profileId, loanId) = await LoanAsync("extra-owner-4");
+        var path = $"/api/profiles/{profileId}/loans/{loanId}";
+
+        var responses = await Task.WhenAll(Enumerable.Range(1, 12).Select(i => SendAsync(HttpMethod.Put, $"{path}/balances/2026-06-30", "extra-owner-4", new { amount = 1_000_000m + i })));
+        var extras = await ReadAsync(await SendAsync(HttpMethod.Get, $"{path}/extras", "extra-owner-4"));
+
+        responses.ShouldAllBe(r => r.StatusCode == HttpStatusCode.OK);
+        extras["balances"]!.AsArray().Count.ShouldBe(1);
+    }
+
+    [TestMethod]
+    public async Task A_loan_whose_schedule_is_not_supported_yet_refuses_extras_with_a_400()
+    {
+        var profileId = await ProfileOfAsync("extra-owner-5");
+        var created = await SendAsync(HttpMethod.Post, $"/api/profiles/{profileId}/loans", "extra-owner-5", new
+        {
+            name = "Serie",
+            currencyCode = "NOK",
+            principal = 100_000m,
+            paidOut = "2026-01-01",
+            firstPaymentDate = "2026-02-01",
+            termMonths = 12,
+            periods = new object[] { new { start = "2026-01-01", rateType = "Variable", repaymentType = "StraightLine", rates = new object[] { new { effectiveFrom = "2026-01-01", annualRatePercent = 5m } } } },
+        });
+        var loanId = (int)(await ReadAsync(created))["id"]!;
+
+        var extra = await SendAsync(HttpMethod.Post, $"/api/profiles/{profileId}/loans/{loanId}/extras/one-off", "extra-owner-5", new { date = "2026-06-15", amount = 1_000m });
+
+        extra.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
     }
 
     [TestMethod]
