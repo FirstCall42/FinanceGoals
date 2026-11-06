@@ -61,6 +61,13 @@ public sealed class AccountValueTests
         (await (await SendAsync(HttpMethod.Get, $"/api/profiles/{profileId}/values{(accountId is null ? string.Empty : $"?accountId={accountId}")}", subject)).Content.ReadFromJsonAsync<List<AccountValue>>()).ShouldNotBeNull();
 
     [TestMethod]
+    public async Task The_test_database_reads_row_versions_like_azure_sql()
+    {
+        // Azure SQL Database has READ_COMMITTED_SNAPSHOT on; the locking in the balance code must work with it.
+        (await SqlServer.QueryAsync(_database, "SELECT CAST(is_read_committed_snapshot_on AS int) FROM sys.databases WHERE name = DB_NAME();")).ShouldBe(["1"]);
+    }
+
+    [TestMethod]
     public async Task A_snapshot_records_several_accounts_and_the_same_date_replaces_them()
     {
         var profileId = await ProfileOfAsync("val-owner-1");

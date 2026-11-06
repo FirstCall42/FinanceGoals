@@ -66,10 +66,15 @@ internal sealed class SqlAccountStore : IAccountStore
             SET XACT_ABORT ON;
             BEGIN TRANSACTION;
             -- Balances carry no currency of their own, so an account with balances keeps its currency.
-            -- The account row is locked first, so a balance can't be added between the check and the update.
+            -- The account row is locked first, in a statement of its own, so a balance can't be added
+            -- between the check and the update (a balance save takes the same lock). Balances are then
+            -- read with READCOMMITTEDLOCK: Azure SQL reads row versions by default (RCSI), and a version
+            -- from before the wait for the lock would miss a balance committed during it.
+            DECLARE @Current char(3) = (SELECT CurrencyCode FROM app.Account WITH (UPDLOCK) WHERE Id = @AccountId AND ProfileId = @ProfileId);
             IF @CurrencyCode IS NOT NULL
-               AND EXISTS (SELECT 1 FROM app.Account WITH (UPDLOCK) WHERE Id = @AccountId AND ProfileId = @ProfileId AND CurrencyCode <> @CurrencyCode)
-               AND EXISTS (SELECT 1 FROM app.AccountValue WHERE AccountId = @AccountId)
+               AND @Current IS NOT NULL
+               AND @Current <> @CurrencyCode
+               AND EXISTS (SELECT 1 FROM app.AccountValue WITH (READCOMMITTEDLOCK) WHERE AccountId = @AccountId)
             BEGIN
                 SELECT -1, N'', '', '', CAST(0 AS bit);
                 ROLLBACK TRANSACTION;
