@@ -313,6 +313,7 @@ internal static class ProfileEndpoints
         profile.MapNetWorth();
         profile.MapForecast();
         profile.MapLoans();
+        profile.MapLoanExtras();
 
         return profile;
     }

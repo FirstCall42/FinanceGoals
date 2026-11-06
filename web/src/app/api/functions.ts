@@ -57,3 +57,17 @@ export type { GetLoan$Params as GetLoan$Params } from './fn/finance-goals-api/ge
 export { getLoan as getLoan } from './fn/finance-goals-api/get-loan';
 export type { AddLoanRateChange$Params as AddLoanRateChange$Params } from './fn/finance-goals-api/add-loan-rate-change';
 export { addLoanRateChange as addLoanRateChange } from './fn/finance-goals-api/add-loan-rate-change';
+export type { GetLoanExtras$Params as GetLoanExtras$Params } from './fn/finance-goals-api/get-loan-extras';
+export { getLoanExtras as getLoanExtras } from './fn/finance-goals-api/get-loan-extras';
+export type { AddLoanOneOffExtra$Params as AddLoanOneOffExtra$Params } from './fn/finance-goals-api/add-loan-one-off-extra';
+export { addLoanOneOffExtra as addLoanOneOffExtra } from './fn/finance-goals-api/add-loan-one-off-extra';
+export type { DeleteLoanOneOffExtra$Params as DeleteLoanOneOffExtra$Params } from './fn/finance-goals-api/delete-loan-one-off-extra';
+export { deleteLoanOneOffExtra as deleteLoanOneOffExtra } from './fn/finance-goals-api/delete-loan-one-off-extra';
+export type { AddLoanMonthlyExtra$Params as AddLoanMonthlyExtra$Params } from './fn/finance-goals-api/add-loan-monthly-extra';
+export { addLoanMonthlyExtra as addLoanMonthlyExtra } from './fn/finance-goals-api/add-loan-monthly-extra';
+export type { DeleteLoanMonthlyExtra$Params as DeleteLoanMonthlyExtra$Params } from './fn/finance-goals-api/delete-loan-monthly-extra';
+export { deleteLoanMonthlyExtra as deleteLoanMonthlyExtra } from './fn/finance-goals-api/delete-loan-monthly-extra';
+export type { SaveLoanBalance$Params as SaveLoanBalance$Params } from './fn/finance-goals-api/save-loan-balance';
+export { saveLoanBalance as saveLoanBalance } from './fn/finance-goals-api/save-loan-balance';
+export type { DeleteLoanBalance$Params as DeleteLoanBalance$Params } from './fn/finance-goals-api/delete-loan-balance';
+export { deleteLoanBalance as deleteLoanBalance } from './fn/finance-goals-api/delete-loan-balance';

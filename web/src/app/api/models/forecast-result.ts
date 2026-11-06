@@ -7,6 +7,7 @@ import { ForecastPoint } from '../models/forecast-point';
  * The forecast in one currency, at today's exchange rates (a forecast does not guess future rates).
  */
 export interface ForecastResult {
+  capped: boolean;
   currency: string;
   from: string;
   missingRates: Array<string>;
