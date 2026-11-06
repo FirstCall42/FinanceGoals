@@ -113,7 +113,7 @@ describe('Net worth page', () => {
       expect(text).toContain('not liquid');
       expect(text).toContain('Month by month');
       expect(text).toContain('excl. RON');
-      expect(text).toContain('The months from 6.11.2026 leave out the accounts in RON');
+      expect(text).toContain('The month 6.11.2026 leave out the accounts in RON');
       expect(text).toContain('the oldest used are from 1.10.2026');
       const chart = (fixture.nativeElement as HTMLElement).querySelector('svg[role=img]');
       expect(chart?.getAttribute('aria-label')).toContain('Net worth over time in NOK');
@@ -155,6 +155,26 @@ describe('Net worth page', () => {
       expect(page.textContent).toContain('leave out the accounts in RON');
       expect(page.textContent).toContain('no rate');
       expect(page.textContent).toContain(`20${nbsp}000,00${nbsp}RON`);
+    });
+  });
+
+  it('names the early months that lack a rate when today is complete', async () => {
+    signIn();
+    const fixture = TestBed.createComponent(NetWorthPage);
+    http.expectOne('/api/currencies').flush([]);
+    await fixture.whenStable();
+    const early = [
+      { date: '2026-01-31', total: 10, liquid: 10, missingRates: ['RON'], rateDate: null },
+      { date: '2026-02-28', total: 10, liquid: 10, missingRates: ['RON'], rateDate: null },
+      { date: '2026-03-31', total: 30, liquid: 30, missingRates: [], rateDate: '2026-03-01' },
+    ];
+    answer('NOK', netWorth(), early);
+
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+      expect(text).toContain('The months from 31.1.2026 to 28.2.2026');
+      expect(text).toContain('too low for those months');
     });
   });
 

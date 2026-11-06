@@ -112,8 +112,16 @@ import { NetWorth, NetWorthPoint, NetWorthService } from './net-worth.service';
             @if (historyMissing(); as missing) {
               <app-missing-rate [currencyCodes]="missing.codes" [date]="missing.from" />
               <p class="note">
-                The months from {{ formatDate(missing.from) }} leave out the accounts in
-                {{ missing.codes.join(' and ') }}, so the lines are too low there.
+                {{
+                  missing.from === missing.to
+                    ? 'The month ' + formatDate(missing.from)
+                    : 'The months from ' +
+                      formatDate(missing.from) +
+                      ' to ' +
+                      formatDate(missing.to)
+                }}
+                leave out the accounts in {{ missing.codes.join(' and ') }}, so the lines are too
+                low for those months.
               </p>
             }
             @if (historyRateDate(); as rate) {
@@ -286,7 +294,11 @@ export class NetWorthPage {
   protected readonly historyMissing = computed(() => {
     const bad = this.history().filter((p) => p.missingRates.length > 0);
     return bad.length > 0
-      ? { codes: [...new Set(bad.flatMap((p) => p.missingRates))].sort(), from: bad[0].date }
+      ? {
+          codes: [...new Set(bad.flatMap((p) => p.missingRates))].sort(),
+          from: bad[0].date,
+          to: bad[bad.length - 1].date,
+        }
       : undefined;
   });
 
