@@ -2,7 +2,7 @@ import { Component, computed, inject, input, signal } from '@angular/core';
 import { MoneyPipe } from '../money/money.pipe';
 import { ComparisonResult, compareExtraAndInvest, returnSpreadPoints } from './extra-vs-invest';
 import { LoanCalculatorService } from './loan-calculator.service';
-import { LoanInput, parseNumber, toRequest } from './loan-input';
+import { LoanInput, isoDate, parseNumber, toRequest } from './loan-input';
 
 const width = 640;
 const height = 240;
@@ -22,7 +22,8 @@ const pad = { left: 8, right: 8, top: 22, bottom: 20 };
       <p class="hint">
         The same amount every month, either as extra payments on this loan or into a fund. When the
         loan ends, what it asked each month goes to the fund. Net worth is the fund minus what is
-        still owed.
+        still owed. It starts at the next payment, and extra payments you have entered in the form
+        are left out.
       </p>
       <form (submit)="compare($event)">
         <div class="grid">
@@ -224,14 +225,17 @@ export class ExtraVsInvest {
       return;
     }
 
-    // The form's loan with only the monthly amount as extra payments.
+    // The form's loan with only the monthly amount as extra payments, from today: what has been
+    // paid is done, so the comparison is about the money from now on.
     const loan = this.loan();
+    const today = isoDate(new Date());
+    const from = loan.firstPayment > today ? loan.firstPayment : today;
     const built = toRequest(
       {
         ...loan,
         extras: [],
         monthlyAmount: String(amount),
-        monthlyFrom: loan.firstPayment,
+        monthlyFrom: from,
         monthlyUntil: '',
       },
       this.minorUnits(),
@@ -249,11 +253,18 @@ export class ExtraVsInvest {
       return;
     }
 
+    // Both schedules are the same up to today; the comparison starts at the next payment.
+    const next = outcome.result.withoutExtraSchedule.findIndex((row) => row.date >= today);
+    if (next < 0) {
+      this.error.set('This loan has no payments left to compare.');
+      return;
+    }
+
     this.error.set(undefined);
     this.result.set({
       ...compareExtraAndInvest({
-        standard: outcome.result.withoutExtraSchedule,
-        withExtra: outcome.result.withExtraSchedule,
+        standard: outcome.result.withoutExtraSchedule.slice(next),
+        withExtra: outcome.result.withExtraSchedule.slice(next),
         amount,
         returnPercent: fundReturn,
         taxDeductionPercent: deduction,

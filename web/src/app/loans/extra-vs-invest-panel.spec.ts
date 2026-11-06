@@ -3,7 +3,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TestBed } from '@angular/core/testing';
 import { ExtraVsInvest } from './extra-vs-invest-panel';
 import { LoanCalculationResult, ScheduleRow } from './loan-calculator.service';
-import { defaultInput } from './loan-input';
+import { defaultInput, isoDate } from './loan-input';
 
 function row(number: number, balance: number, extra: number): ScheduleRow {
   return {
@@ -49,7 +49,7 @@ describe('Extra payments or investing panel', () => {
     const request = http.expectOne('/api/loans/calculate');
     expect(request.request.body.extras).toEqual([]);
     expect(request.request.body.monthlyExtras).toEqual([
-      { amount: 5000, from: '2026-02-20', until: null },
+      { amount: 5000, from: isoDate(new Date()), until: null },
     ]);
     request.flush(result);
     await vi.waitFor(() => {
@@ -88,5 +88,28 @@ describe('Extra payments or investing panel', () => {
 
     expect(element.querySelector('[role="alert"]')?.textContent).toContain('between 0 and 100');
     http.expectNone('/api/loans/calculate');
+  });
+
+  it('starts at the next payment: a loan paid off in the past has nothing to compare', async () => {
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    });
+    const http = TestBed.inject(HttpTestingController);
+    const fixture = TestBed.createComponent(ExtraVsInvest);
+    fixture.componentRef.setInput('loan', defaultInput(new Date(2026, 0, 20)));
+    fixture.detectChanges();
+    const element = fixture.nativeElement as HTMLElement;
+    element.querySelector('form')!.dispatchEvent(new Event('submit'));
+    await fixture.whenStable();
+    const past = (row: ScheduleRow) => ({ ...row, date: '2020-0' + row.number + '-01' });
+    http.expectOne('/api/loans/calculate').flush({
+      ...result,
+      withoutExtraSchedule: result.withoutExtraSchedule.map(past),
+      withExtraSchedule: result.withExtraSchedule.map(past),
+    });
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(element.querySelector('[role="alert"]')?.textContent).toContain('no payments left');
+    });
   });
 });
