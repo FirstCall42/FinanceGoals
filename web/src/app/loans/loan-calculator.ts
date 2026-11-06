@@ -1,11 +1,14 @@
 import { Component, computed, effect, inject, signal } from '@angular/core';
+import { AuthService } from '../auth/auth.service';
 import { CurrencyService } from '../currency/currency.service';
 import { MoneyPipe } from '../money/money.pipe';
+import { messageOf } from '../profile/profile.service';
 import {
   LoanCalculationResult,
   LoanCalculatorService,
   ScheduleRow,
 } from './loan-calculator.service';
+import { SavedLoan, SavedLoanService } from './saved-loan.service';
 import { LoanInput, defaultInput, formatMonths, isoDate, toRequest } from './loan-input';
 
 const storageKey = 'financegoals.loanCalculator';
@@ -33,6 +36,13 @@ interface ScheduleYear {
 export class LoanCalculator {
   private readonly calculator = inject(LoanCalculatorService);
   private readonly currencyService = inject(CurrencyService);
+  private readonly auth = inject(AuthService);
+  private readonly saved = inject(SavedLoanService);
+
+  protected readonly profile = computed(() => this.auth.profiles()[0]);
+  protected readonly savedLoans = signal<readonly SavedLoan[]>([]);
+  protected readonly loanName = signal('');
+  protected readonly notice = signal<string | undefined>(undefined);
 
   protected readonly input = signal<LoanInput>(loadInput());
   protected readonly result = signal<LoanCalculationResult | undefined>(undefined);
@@ -89,6 +99,15 @@ export class LoanCalculator {
         // Storage can be blocked (private windows); the form then simply starts fresh next time.
       }
     });
+    effect(() => {
+      const profile = this.profile();
+      if (profile) {
+        this.saved
+          .list(profile.id)
+          .then((list) => this.savedLoans.set(list))
+          .catch((error: unknown) => this.notice.set(messageOf(error)));
+      }
+    });
   }
 
   protected set<K extends keyof LoanInput>(key: K, value: LoanInput[K]): void {
@@ -133,6 +152,54 @@ export class LoanCalculator {
       'extras',
       this.input().extras.filter((_, i) => i !== index),
     );
+  }
+
+  /** Opens a stored loan in the form and calculates it. */
+  protected async open(loan: SavedLoan): Promise<void> {
+    const profile = this.profile();
+    if (!profile) {
+      return;
+    }
+    try {
+      const opened = await this.saved.open(profile.id, loan.id);
+      if (typeof opened === 'string') {
+        this.notice.set(opened);
+        return;
+      }
+      this.input.set(opened);
+      this.loanName.set(loan.name);
+      this.notice.set(`Opened ${loan.name}.`);
+      await this.calculate();
+    } catch (error) {
+      this.notice.set(messageOf(error));
+    }
+  }
+
+  /** Stores what the form describes as a loan of the household. */
+  protected async save(): Promise<void> {
+    const profile = this.profile();
+    const name = this.loanName().trim();
+    if (!profile) {
+      return;
+    }
+    if (name === '') {
+      this.notice.set('Give the loan a name to save it.');
+      return;
+    }
+    const built = toRequest(this.input(), this.minorUnits());
+    if ('error' in built) {
+      this.notice.set(built.error);
+      return;
+    }
+    try {
+      const stored = await this.saved.save(profile.id, name, built.request);
+      this.savedLoans.set(
+        [...this.savedLoans(), stored].sort((a, b) => a.name.localeCompare(b.name)),
+      );
+      this.notice.set(`Saved ${stored.name}.`);
+    } catch (error) {
+      this.notice.set(messageOf(error));
+    }
   }
 
   protected reset(): void {

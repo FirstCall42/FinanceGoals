@@ -1,6 +1,7 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
+import { AuthService } from '../auth/auth.service';
 import { LoanCalculator } from './loan-calculator';
 import { LoanCalculationResult, LoanCalculatorService } from './loan-calculator.service';
 import { LoanInput, defaultInput, formatMonths, parseNumber, toRequest } from './loan-input';
@@ -116,6 +117,36 @@ describe('Loan calculator', () => {
   });
 
   afterEach(() => http.verify());
+
+  it('lists the saved loans and saves the loan in the form with its extras', async () => {
+    TestBed.inject(AuthService).profiles.set([
+      { id: 4, name: 'Household', role: 'Owner', mainCurrency: 'NOK' },
+    ]);
+    const fixture = TestBed.createComponent(LoanCalculator);
+    http.expectOne('/api/currencies').flush([]);
+    await fixture.whenStable();
+    http.expectOne('/api/profiles/4/loans').flush([{ id: 9, name: 'Cabin' }]);
+    const page = fixture.nativeElement as HTMLElement;
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(page.textContent).toContain('Open Cabin');
+    });
+
+    const name = page.querySelector('#saved-title ~ label input') as HTMLInputElement;
+    name.value = 'Home';
+    name.dispatchEvent(new Event('input'));
+    const save = Array.from(page.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('Save this loan'),
+    );
+    save?.click();
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(
+        http.expectOne('/api/profiles/4/loans').request.body.name,
+        page.querySelector('[role=status]')?.textContent ?? 'no status',
+      ).toBe('Home');
+    });
+  });
 
   it('shows the API message when the loan is refused', async () => {
     const built = toRequest(input(), 2);
