@@ -10,8 +10,11 @@ import { AuthService } from './auth.service';
       <button type="button" class="sign-out" (click)="auth.signOut()">Sign out</button>
     } @else {
       <div #button class="google"></div>
-      @if (auth.error(); as message) {
+      @if (auth.loading()) {
+        <span class="error" role="status">Waking up the server, sign-in comes in a moment…</span>
+      } @else if (auth.error(); as message) {
         <span class="error" role="status">{{ message }}</span>
+        <button type="button" class="sign-out" (click)="auth.retry()">Try again</button>
       }
     }
   `,

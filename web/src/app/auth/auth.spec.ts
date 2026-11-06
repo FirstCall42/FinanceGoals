@@ -60,6 +60,24 @@ describe('Sign-in', () => {
     expect(sessionStorage.getItem('financegoals.idToken')).toBe(credential);
   });
 
+  it('waits while the settings load, reports a failure and loads them again on retry', async () => {
+    const starting = auth.start();
+    expect(auth.loading()).toBe(true);
+    http.expectOne('/api/auth/config').flush('asleep', { status: 503, statusText: 'Unavailable' });
+    await starting;
+
+    expect(auth.loading()).toBe(false);
+    expect(auth.error()).toBeDefined();
+
+    const retrying = auth.retry();
+    expect(auth.loading()).toBe(true);
+    expect(auth.error()).toBeUndefined();
+    http.expectOne('/api/auth/config').flush({ googleClientId: null });
+    await retrying;
+
+    expect(auth.loading()).toBe(false);
+  });
+
   it('does not use an expired token', async () => {
     await auth.signIn(token(-60));
 
