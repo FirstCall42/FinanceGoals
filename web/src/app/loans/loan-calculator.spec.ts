@@ -118,7 +118,13 @@ describe('Loan calculator', () => {
 
   afterEach(() => http.verify());
 
-  it('lists the saved loans and saves the loan in the form with its extras', async () => {
+  const withExtras = (extras: { date: string; amount: string }[]) =>
+    localStorage.setItem(
+      'financegoals.loanCalculator',
+      JSON.stringify({ ...defaultInput(new Date(2026, 0, 20)), extras }),
+    );
+
+  const openSaved = async () => {
     TestBed.inject(AuthService).profiles.set([
       { id: 4, name: 'Household', role: 'Owner', mainCurrency: 'NOK' },
     ]);
@@ -131,21 +137,67 @@ describe('Loan calculator', () => {
       fixture.detectChanges();
       expect(page.textContent).toContain('Open Cabin');
     });
-
     const name = page.querySelector('#saved-title ~ label input') as HTMLInputElement;
     name.value = 'Home';
     name.dispatchEvent(new Event('input'));
     const save = Array.from(page.querySelectorAll('button')).find((b) =>
       b.textContent?.includes('Save this loan'),
     );
-    save?.click();
+    return { fixture, page, save: () => save?.click() };
+  };
+
+  it('saves the loan, then its extra payments, and lists it', async () => {
+    withExtras([{ date: '2026-06-15', amount: '100 000' }]);
+    const { fixture, page, save } = await openSaved();
+
+    save();
+    const create = await vi.waitFor(() => http.expectOne('/api/profiles/4/loans'));
+    expect(create.request.body.name).toBe('Home');
+    create.flush({ id: 10, name: 'Home' });
+    const extra = await vi.waitFor(() => http.expectOne('/api/profiles/4/loans/10/extras/one-off'));
+    expect(extra.request.body).toEqual({ date: '2026-06-15', amount: 100000 });
+    extra.flush({});
+
     await vi.waitFor(() => {
       fixture.detectChanges();
-      expect(
-        http.expectOne('/api/profiles/4/loans').request.body.name,
-        page.querySelector('[role=status]')?.textContent ?? 'no status',
-      ).toBe('Home');
+      expect(page.textContent).toContain('Saved Home.');
+      expect(page.textContent).toContain('Open Home');
     });
+  });
+
+  it('keeps a saved loan listed and says which extras failed', async () => {
+    withExtras([{ date: '2026-06-15', amount: '100 000' }]);
+    const { fixture, page, save } = await openSaved();
+
+    save();
+    const create = await vi.waitFor(() => http.expectOne('/api/profiles/4/loans'));
+    create.flush({ id: 10, name: 'Home' });
+    const extra = await vi.waitFor(() => http.expectOne('/api/profiles/4/loans/10/extras/one-off'));
+    extra.flush(
+      { errors: { extra: ['A one-off extra payment falls outside the loan.'] } },
+      { status: 400, statusText: 'Bad Request' },
+    );
+
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(page.textContent).toContain('Saved Home, but not all extra payments');
+      expect(page.textContent).toContain('falls outside the loan');
+      expect(page.textContent).toContain('Open Home');
+    });
+  });
+
+  it('does not save when two extra payments fall on the same day', async () => {
+    withExtras([
+      { date: '2026-06-15', amount: '1 000' },
+      { date: '2026-06-15', amount: '2 000' },
+    ]);
+    const { fixture, page, save } = await openSaved();
+
+    save();
+    fixture.detectChanges();
+
+    expect(page.textContent).toContain('same day');
+    http.expectNone('/api/profiles/4/loans');
   });
 
   it('shows the API message when the loan is refused', async () => {

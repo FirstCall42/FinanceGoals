@@ -191,12 +191,21 @@ export class LoanCalculator {
       this.notice.set(built.error);
       return;
     }
+    const days = built.request.extras.map((e) => e.date);
+    if (new Set(days).size !== days.length) {
+      this.notice.set('Two extra payments fall on the same day; combine them before saving.');
+      return;
+    }
     try {
-      const stored = await this.saved.save(profile.id, name, built.request);
+      const { loan, failed } = await this.saved.save(profile.id, name, built.request);
       this.savedLoans.set(
-        [...this.savedLoans(), stored].sort((a, b) => a.name.localeCompare(b.name)),
+        [...this.savedLoans(), loan].sort((a, b) => a.name.localeCompare(b.name)),
       );
-      this.notice.set(`Saved ${stored.name}.`);
+      this.notice.set(
+        failed
+          ? `Saved ${loan.name}, but not all extra payments: ${failed}`
+          : `Saved ${loan.name}.`,
+      );
     } catch (error) {
       this.notice.set(messageOf(error));
     }

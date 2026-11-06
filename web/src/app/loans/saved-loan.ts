@@ -13,6 +13,9 @@ const typed = (value: number | string): string => String(value).replace('.', ','
  * monthly extra.
  */
 export function inputFromStored(loan: LoanView, extras: LoanExtrasView): LoanInput | string {
+  if (loan.dayCount !== 'ActualActual') {
+    return 'This loan counts interest days differently from the calculator; it cannot show it yet.';
+  }
   const [period, ...more] = loan.periods;
   if (more.length > 0 || period.rateType !== 'Variable' || period.repaymentType !== 'Annuity') {
     return 'This loan has fixed-rate, interest-only or several periods; the calculator cannot show it yet.';
@@ -27,7 +30,7 @@ export function inputFromStored(loan: LoanView, extras: LoanExtrasView): LoanInp
     principal: String(loan.principal),
     paidOut: loan.paidOut,
     firstPayment: loan.firstPaymentDate,
-    termYears: typed(Number(loan.termMonths) / 12),
+    termYears: typed(Math.round((Number(loan.termMonths) / 12) * 1e4) / 1e4),
     startRate: typed(first.annualRatePercent),
     fee: String(loan.feePerPayment),
     rateChanges: changes.map((c) => ({ from: c.effectiveFrom, rate: typed(c.annualRatePercent) })),

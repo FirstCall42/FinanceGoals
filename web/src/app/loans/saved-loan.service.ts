@@ -6,6 +6,7 @@ import { createLoan } from '../api/fn/finance-goals-api/create-loan';
 import { getLoan } from '../api/fn/finance-goals-api/get-loan';
 import { getLoanExtras } from '../api/fn/finance-goals-api/get-loan-extras';
 import { listLoans } from '../api/fn/finance-goals-api/list-loans';
+import { messageOf } from '../profile/profile.service';
 import { LoanInput } from './loan-input';
 import { LoanCalculationRequest } from './loan-calculator.service';
 import { inputFromStored, toCreateLoan } from './saved-loan';
@@ -34,27 +35,48 @@ export class SavedLoanService {
     return inputFromStored(loan, extras);
   }
 
-  /** Stores the loan, then its extra payments; the loan stays stored if an extra is refused. */
-  async save(profileId: number, name: string, request: LoanCalculationRequest): Promise<SavedLoan> {
+  /**
+   * Stores the loan, then its extra payments. The loan stays stored if an extra is refused, so the
+   * result says which extras failed; the caller shows the loan as saved with that message.
+   */
+  async save(
+    profileId: number,
+    name: string,
+    request: LoanCalculationRequest,
+  ): Promise<{ loan: SavedLoan; failed: string | undefined }> {
     const loan = await this.api.invoke(createLoan, {
       profileId,
       body: toCreateLoan(name, request),
     });
     const loanId = Number(loan.id);
+    let failed: string | undefined;
     for (const e of request.extras) {
-      await this.api.invoke(addLoanOneOffExtra, {
-        profileId,
-        loanId,
-        body: { date: e.date, amount: e.amount },
-      });
+      failed ??= await this.tryAdd(() =>
+        this.api.invoke(addLoanOneOffExtra, {
+          profileId,
+          loanId,
+          body: { date: e.date, amount: e.amount },
+        }),
+      );
     }
     for (const m of request.monthlyExtras) {
-      await this.api.invoke(addLoanMonthlyExtra, {
-        profileId,
-        loanId,
-        body: { amount: m.amount, from: m.from, until: m.until },
-      });
+      failed ??= await this.tryAdd(() =>
+        this.api.invoke(addLoanMonthlyExtra, {
+          profileId,
+          loanId,
+          body: { amount: m.amount, from: m.from, until: m.until },
+        }),
+      );
     }
-    return { id: loanId, name: loan.name };
+    return { loan: { id: loanId, name: loan.name }, failed };
+  }
+
+  private async tryAdd(add: () => Promise<unknown>): Promise<string | undefined> {
+    try {
+      await add();
+      return undefined;
+    } catch (error) {
+      return messageOf(error);
+    }
   }
 }

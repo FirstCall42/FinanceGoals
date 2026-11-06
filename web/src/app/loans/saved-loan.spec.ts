@@ -58,6 +58,10 @@ describe('Saved loans in the calculator', () => {
     });
   });
 
+  it('refuses a loan that counts interest days the 30/360 way', () => {
+    expect(inputFromStored(loan({ dayCount: 'Thirty360' }), extras())).toContain('interest days');
+  });
+
   it('says why a loan with fixed, interest-only or several periods does not open', () => {
     const fixed = loan({
       periods: [{ start: '2026-01-01', rateType: 'Fixed', repaymentType: 'Annuity', rates: [] }],
