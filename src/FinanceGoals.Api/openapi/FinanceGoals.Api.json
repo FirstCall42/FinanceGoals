@@ -1724,6 +1724,7 @@
           "currency",
           "from",
           "returnSpread",
+          "capped",
           "missingRates",
           "points"
         ],
@@ -1743,6 +1744,9 @@
               "string"
             ],
             "format": "double"
+          },
+          "capped": {
+            "type": "boolean"
           },
           "missingRates": {
             "type": "array",

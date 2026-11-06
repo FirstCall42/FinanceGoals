@@ -74,6 +74,18 @@ public sealed class BalanceForecastTests
     }
 
     [TestMethod]
+    public void Extreme_inputs_stop_at_a_cap_instead_of_overflowing()
+    {
+        // 100 % a year and a huge contribution for fifty years, converted USD to NOK.
+        var result = Run(600, [Acc(1, "USD")], [Val(1, 10_000_000_000_000m)], new AccountAssumption(1, 1m, 1_000_000_000_000m));
+
+        result.Capped.ShouldBeTrue();
+        result.Points.Count.ShouldBe(601);
+        result.Points[^1].High.ShouldBeGreaterThan(0m);
+        Run(12, [Acc(1)], [Val(1, 1_000m)]).Capped.ShouldBeFalse();
+    }
+
+    [TestMethod]
     public void Archived_accounts_and_accounts_without_a_balance_are_left_out()
     {
         var result = Run(2, [Acc(1, archivedOn: new DateOnly(2026, 1, 1)), Acc(2), Acc(3)], [Val(1, 900m), Val(3, 50m)]);

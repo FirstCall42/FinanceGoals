@@ -8,7 +8,7 @@ public sealed record ForecastPoint(DateOnly Date, decimal Low, decimal Expected,
 
 /// <summary>The forecast in one currency, at today's exchange rates (a forecast does not guess future rates).</summary>
 public sealed record ForecastResult(
-    string Currency, DateOnly From, decimal ReturnSpread, IReadOnlyList<string> MissingRates, IReadOnlyList<ForecastPoint> Points);
+    string Currency, DateOnly From, decimal ReturnSpread, bool Capped, IReadOnlyList<string> MissingRates, IReadOnlyList<ForecastPoint> Points);
 
 /// <summary>
 /// Balances month by month from each account's latest balance (#119). An account grows by its expected
@@ -17,6 +17,7 @@ public sealed record ForecastResult(
 /// the expected return minus and plus <see cref="ReturnSpread"/>, only for accounts that have one.
 /// Each account's month is rounded to its currency's minor units, converted at today's rate, rounded to
 /// the target's, and the totals add those rounded figures. A currency without a rate is listed and left out.
+/// An account's amount stops at <see cref="_cap"/> (and the result says so), so extreme inputs can't overflow.
 /// Loans (#107) join later.
 /// </summary>
 public static class BalanceForecast
@@ -25,6 +26,9 @@ public static class BalanceForecast
     public const decimal ReturnSpread = 0.02m;
 
     public const int MaxMonths = 600;
+
+    // Far above any real fortune, far below what a decimal holds after a conversion at any exchange rate.
+    private const decimal _cap = 1_000_000_000_000_000m;
 
     public static ForecastResult Project(
         DateOnly today,
@@ -54,6 +58,7 @@ public static class BalanceForecast
         var expected = new decimal[months + 1];
         var high = new decimal[months + 1];
         var missing = new SortedSet<string>(StringComparer.Ordinal);
+        var capped = false;
 
         foreach (var account in accounts)
         {
@@ -80,6 +85,11 @@ public static class BalanceForecast
                     if (month > 0)
                     {
                         amount = decimal.Round(amount * (1m + MonthlyRate(rate ?? 0m)) + contribution, own.MinorUnits, MidpointRounding.AwayFromZero);
+                        if (Math.Abs(amount) > _cap)
+                        {
+                            amount = Math.Sign(amount) * _cap;
+                            capped = true;
+                        }
                     }
 
                     switch (converter.Convert(new Money(amount, own), target, today))
@@ -102,7 +112,7 @@ public static class BalanceForecast
         var points = Enumerable.Range(0, months + 1)
             .Select(month => new ForecastPoint(today.AddMonths(month), low[month], expected[month], high[month]))
             .ToArray();
-        return new ForecastResult(target.Code, today, ReturnSpread, [.. missing], points);
+        return new ForecastResult(target.Code, today, ReturnSpread, capped, [.. missing], points);
     }
 
     /// <summary>The monthly rate that compounds to the yearly one over twelve months.</summary>
