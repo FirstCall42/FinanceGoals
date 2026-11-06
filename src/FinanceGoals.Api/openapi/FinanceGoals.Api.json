@@ -98,6 +98,16 @@
         ],
         "summary": "Records the sign-in of the Google account in the bearer token; returns the user and their profiles, creating one on the first sign-in.",
         "operationId": "SignIn",
+        "parameters": [
+          {
+            "name": "createProfile",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": true
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -105,6 +115,47 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SignedIn"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/invites/accept": {
+      "post": {
+        "tags": [
+          "FinanceGoals.Api"
+        ],
+        "summary": "Joins the profile of an invite link as a Member. The signed-in account's email must match the invite.",
+        "operationId": "AcceptInvite",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcceptInvite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AcceptedInvite"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
                 }
               }
             }
@@ -191,10 +242,164 @@
           }
         }
       }
+    },
+    "/api/profiles/{profileId}/invites": {
+      "post": {
+        "tags": [
+          "FinanceGoals.Api"
+        ],
+        "summary": "Invites someone by the email of their Google account. Returns the single-use token for the link, once. Owners only.",
+        "operationId": "InviteMember",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InviteMember"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatedInvite"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "FinanceGoals.Api"
+        ],
+        "summary": "Invites that are not used or expired yet. Owners only.",
+        "operationId": "ListInvites",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PendingInvite"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/profiles/{profileId}/invites/{inviteId}": {
+      "delete": {
+        "tags": [
+          "FinanceGoals.Api"
+        ],
+        "summary": "Withdraws a pending invite. Owners only.",
+        "operationId": "RevokeInvite",
+        "parameters": [
+          {
+            "name": "inviteId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
+      "AcceptedInvite": {
+        "required": [
+          "profileId"
+        ],
+        "type": "object",
+        "properties": {
+          "profileId": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          }
+        },
+        "description": "The profile an accepted invite joined."
+      },
+      "AcceptInvite": {
+        "required": [
+          "token"
+        ],
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "The token from an invite link."
+      },
+      "CreatedInvite": {
+        "required": [
+          "id",
+          "email",
+          "expiresAt",
+          "token"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "email": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "token": {
+            "type": "string"
+          }
+        },
+        "description": "A new invite; string CreatedInvite.Token goes in the link and is never stored or shown again."
+      },
       "CurrencyInfo": {
         "required": [
           "code",
@@ -297,6 +502,21 @@
             }
           }
         }
+      },
+      "InviteMember": {
+        "required": [
+          "email"
+        ],
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "Whom to invite: the email address of their Google account."
       },
       "LoanCalculationRequest": {
         "required": [
@@ -475,6 +695,70 @@
           }
         },
         "description": "An extra repayment with every payment from a date, optionally until a date."
+      },
+      "PendingInvite": {
+        "required": [
+          "id",
+          "email",
+          "expiresAt"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "email": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "description": "An invite that hasn't been accepted yet."
+      },
+      "ProblemDetails": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "title": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "status": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "null",
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "detail": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "instance": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
       },
       "ProfileMember": {
         "required": [

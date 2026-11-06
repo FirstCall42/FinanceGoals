@@ -1,10 +1,12 @@
 import { Component, computed, inject } from '@angular/core';
 import { CurrencyService } from '../currency/currency.service';
 import { DisplayCurrencyService } from '../currency/display-currency.service';
+import { HouseholdSettings } from '../profile/household-settings';
 
 /** Household settings. For now: the main currency (kept in this browser until profiles exist, #25). */
 @Component({
   selector: 'app-settings',
+  imports: [HouseholdSettings],
   template: `
     <section aria-labelledby="settings-title">
       <h1 id="settings-title">Settings</h1>
@@ -23,8 +25,14 @@ import { DisplayCurrencyService } from '../currency/display-currency.service';
         <p role="status">The currency list couldn't be loaded. Try again later.</p>
       }
     </section>
+    <app-household-settings />
   `,
   styles: `
+    :host {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
     section {
       background: var(--fg-surface);
       border: 1px solid var(--fg-line);

@@ -76,9 +76,46 @@ internal static class ProfileEndpoints
             .WithName("ListProfileMembers")
             .WithSummary("The profile's members and their roles.");
 
+        profile.MapPost("/invites", async Task<Results<Created<CreatedInvite>, ValidationProblem>> (InviteMember request, HttpContext http, IProfileInviteStore invites, CancellationToken cancellationToken) =>
+            {
+                var email = request.Email?.Trim() ?? string.Empty;
+                if (email.Length is < 3 or > 320 || email.IndexOf('@', StringComparison.Ordinal) is < 1 || email.EndsWith('@'))
+                {
+                    return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["email"] = ["Enter the email address of their Google account."] });
+                }
+
+                var access = http.Access();
+                var invite = await invites.CreateAsync(access.ProfileId, email, access.UserId, cancellationToken);
+                return TypedResults.Created($"/api/profiles/{access.ProfileId}/invites/{invite.Id}", invite);
+            })
+            .WithMetadata(new OwnerOnly())
+            .WithName("InviteMember")
+            .WithSummary("Invites someone by the email of their Google account. Returns the single-use token for the link, once. Owners only.");
+
+        profile.MapGet("/invites", async (HttpContext http, IProfileInviteStore invites, CancellationToken cancellationToken) =>
+                TypedResults.Ok(await invites.PendingAsync(http.Access().ProfileId, cancellationToken)))
+            .WithMetadata(new OwnerOnly())
+            .WithName("ListInvites")
+            .WithSummary("Invites that are not used or expired yet. Owners only.");
+
+        profile.MapDelete("/invites/{inviteId:int}", async Task<Results<NoContent, NotFound>> (int inviteId, HttpContext http, IProfileInviteStore invites, CancellationToken cancellationToken) =>
+                await invites.RevokeAsync(http.Access().ProfileId, inviteId, cancellationToken) ? TypedResults.NoContent() : TypedResults.NotFound())
+            .WithMetadata(new OwnerOnly())
+            .WithName("RevokeInvite")
+            .WithSummary("Withdraws a pending invite. Owners only.");
+
         return profile;
     }
 }
 
 /// <summary>A new name for a profile.</summary>
 internal sealed record RenameProfile(string? Name);
+
+/// <summary>Whom to invite: the email address of their Google account.</summary>
+internal sealed record InviteMember(string? Email);
+
+/// <summary>The profile an accepted invite joined.</summary>
+internal sealed record AcceptedInvite(int ProfileId);
+
+/// <summary>The token from an invite link.</summary>
+internal sealed record AcceptInvite(string? Token);
