@@ -1440,7 +1440,8 @@
           "date",
           "total",
           "liquid",
-          "missingRates"
+          "missingRates",
+          "rateDate"
         ],
         "type": "object",
         "properties": {
@@ -1469,6 +1470,13 @@
             "items": {
               "type": "string"
             }
+          },
+          "rateDate": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date"
           }
         },
         "description": "Net worth at the end of a month (or today), for the history."

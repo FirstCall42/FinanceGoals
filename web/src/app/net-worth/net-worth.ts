@@ -109,9 +109,17 @@ import { NetWorth, NetWorthPoint, NetWorthService } from './net-worth.service';
           @if (history().length > 0) {
             <h2>Month by month</h2>
             <app-net-worth-chart [points]="history()" [currency]="nw.currency" />
-            @if (rateDate(); as rate) {
+            @if (historyMissing(); as missing) {
+              <app-missing-rate [currencyCodes]="missing.codes" [date]="missing.from" />
               <p class="note">
-                Converted with exchange rates from {{ formatDate(rate) }} or earlier.
+                The months from {{ formatDate(missing.from) }} leave out the accounts in
+                {{ missing.codes.join(' and ') }}, so the lines are too low there.
+              </p>
+            }
+            @if (historyRateDate(); as rate) {
+              <p class="note">
+                The history is converted with each month's rates; the oldest used are from
+                {{ formatDate(rate) }}.
               </p>
             }
             <div class="table-wrap">
@@ -271,6 +279,21 @@ export class NetWorthPage {
   /** The oldest exchange rate behind any converted line, to say which day's rates the figures use. */
   protected readonly rateDate = computed(() => {
     const dates = (this.current()?.lines ?? []).map((l) => l.rateDate).filter((d) => d !== null);
+    return dates.length > 0 ? dates.reduce((a, b) => (a < b ? a : b)) : undefined;
+  });
+
+  /** Currencies missing a rate in any month of the history, and the first such month. */
+  protected readonly historyMissing = computed(() => {
+    const bad = this.history().filter((p) => p.missingRates.length > 0);
+    return bad.length > 0
+      ? { codes: [...new Set(bad.flatMap((p) => p.missingRates))].sort(), from: bad[0].date }
+      : undefined;
+  });
+
+  protected readonly historyRateDate = computed(() => {
+    const dates = this.history()
+      .map((p) => p.rateDate)
+      .filter((d) => d !== null);
     return dates.length > 0 ? dates.reduce((a, b) => (a < b ? a : b)) : undefined;
   });
 

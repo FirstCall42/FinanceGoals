@@ -41,8 +41,20 @@ const netWorth = (over: object = {}) => ({
 });
 
 const history = [
-  { date: '2026-10-31', total: 4_000_000, liquid: 40_000, missingRates: [] },
-  { date: '2026-11-06', total: 4_074_000, liquid: 58_000, missingRates: ['RON'] },
+  {
+    date: '2026-10-31',
+    total: 4_000_000,
+    liquid: 40_000,
+    missingRates: [],
+    rateDate: '2026-10-01',
+  },
+  {
+    date: '2026-11-06',
+    total: 4_074_000,
+    liquid: 58_000,
+    missingRates: ['RON'],
+    rateDate: '2026-11-01',
+  },
 ];
 
 describe('Net worth page', () => {
@@ -101,6 +113,8 @@ describe('Net worth page', () => {
       expect(text).toContain('not liquid');
       expect(text).toContain('Month by month');
       expect(text).toContain('excl. RON');
+      expect(text).toContain('The months from 6.11.2026 leave out the accounts in RON');
+      expect(text).toContain('the oldest used are from 1.10.2026');
       const chart = (fixture.nativeElement as HTMLElement).querySelector('svg[role=img]');
       expect(chart?.getAttribute('aria-label')).toContain('Net worth over time in NOK');
       expect(chart?.querySelectorAll('circle.hollow').length).toBe(1);

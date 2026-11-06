@@ -44,7 +44,8 @@ public sealed record NetWorthResult(
     IReadOnlyList<NetWorthLine> Lines);
 
 /// <summary>Net worth at the end of a month (or today), for the history.</summary>
-public sealed record NetWorthPoint(DateOnly Date, decimal Total, decimal Liquid, IReadOnlyList<string> MissingRates);
+// RateDate: the date of the oldest exchange rate behind this point; null when nothing was converted.
+public sealed record NetWorthPoint(DateOnly Date, decimal Total, decimal Liquid, IReadOnlyList<string> MissingRates, DateOnly? RateDate);
 
 /// <summary>
 /// Net worth from account balances (#37). The balance of an account on a date is its latest recorded one
@@ -143,7 +144,7 @@ public static class NetWorthCalculator
             var end = month.AddMonths(1).AddDays(-1);
             var day = end < to ? end : to;
             var result = On(day, target, accounts, values, minorUnits, converter);
-            points.Add(new NetWorthPoint(day, result.Total, result.Liquid, result.MissingRates));
+            points.Add(new NetWorthPoint(day, result.Total, result.Liquid, result.MissingRates, result.Lines.Min(l => l.RateDate)));
         }
 
         return points;

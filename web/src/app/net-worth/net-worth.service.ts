@@ -36,6 +36,8 @@ export interface NetWorthPoint {
   readonly total: number;
   readonly liquid: number;
   readonly missingRates: readonly string[];
+  /** The date of the oldest exchange rate behind this point; null when nothing was converted. */
+  readonly rateDate: string | null;
 }
 
 /** Net worth and its monthly history (#37), through the generated API client. */
@@ -73,6 +75,7 @@ export class NetWorthService {
       total: Number(p.total),
       liquid: Number(p.liquid),
       missingRates: p.missingRates,
+      rateDate: p.rateDate,
     }));
   }
 }
