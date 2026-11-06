@@ -52,6 +52,7 @@ public static class LoanSchedule
     {
         ArgumentNullException.ThrowIfNull(loan);
         extras ??= ExtraPayments.None;
+        extras.CheckFits(loan);
 
         var currency = loan.Principal.Currency;
         var balance = loan.Principal.Amount;
@@ -109,7 +110,7 @@ public static class LoanSchedule
             if (extra > 0 && balance > 0 && period.RepaymentType == RepaymentType.Annuity)
             {
                 // Keep the payment, shorten the term: the months the payment needs to clear what is left.
-                remaining = Math.Min(remaining, PaymentsToRepay(balance, rate / 12m, annuityPayment) + 1);
+                remaining = Math.Min(remaining, PaymentsToRepay(balance, rate / 12m, annuityPayment, currency.MinorUnits) + 1);
             }
 
             installments.Add(new Installment(
@@ -173,20 +174,30 @@ public static class LoanSchedule
     /// The whole number of monthly payments a level payment needs to repay a balance (Excel's NPER,
     /// rounded up; the last payment is then smaller).
     /// </summary>
-    public static int PaymentsToRepay(decimal balance, decimal monthlyRate, decimal payment)
+    public static int PaymentsToRepay(decimal balance, decimal monthlyRate, decimal payment, int minorUnits = 2)
     {
         if (payment <= balance * monthlyRate)
         {
             throw new ArgumentOutOfRangeException(nameof(payment), payment, "The payment does not cover the interest.");
         }
 
-        // n = -ln(1 - B r / P) / ln(1 + r). Only the whole number of months is needed, so double is
-        // precise enough. A payment rounded down to øre leaves a few øre after the last month; the
-        // tolerance (a thousandth of a payment) lets the last payment take them instead of adding a month.
-        var months = monthlyRate == 0
+        // n = -ln(1 - B r / P) / ln(1 + r) estimates the months in double; the whole number is then
+        // settled exactly in decimal. k months are enough if what is left after them is no more than a
+        // payment rounded down by half a minor unit leaves; the last payment takes that residue.
+        var estimate = monthlyRate == 0
             ? (double)(balance / payment)
             : -Math.Log(1 - (double)(balance * monthlyRate / payment)) / Math.Log(1 + (double)monthlyRate);
-        return Math.Max(1, (int)Math.Ceiling(months - 1e-3));
+        var months = Math.Max(1, (int)Math.Floor(estimate));
+        var halfMinorUnit = 0.5m / (decimal)Math.Pow(10, minorUnits);
+        var growth = 1m;
+        for (var i = 0; i < months; i++)
+        {
+            growth *= 1 + monthlyRate;
+        }
+
+        var annuityFactor = monthlyRate == 0 ? months : (growth - 1) / monthlyRate;
+        var left = (balance * growth) - (payment * annuityFactor);
+        return left <= halfMinorUnit * annuityFactor ? months : months + 1;
     }
 
     /// <summary>Days between two dates on a 30/360 basis (every month counts as 30 days).</summary>

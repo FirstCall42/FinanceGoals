@@ -12,6 +12,11 @@ public sealed record ExtraPayment
             throw new ArgumentOutOfRangeException(nameof(amount), amount.Amount, "An extra payment must be positive.");
         }
 
+        if (amount.Round() != amount)
+        {
+            throw new ArgumentException("An extra payment is a whole number of minor units (øre, cents).", nameof(amount));
+        }
+
         Date = date;
         Amount = amount;
     }
@@ -29,6 +34,11 @@ public sealed record MonthlyExtraPayment
         if (amount.Amount <= 0)
         {
             throw new ArgumentOutOfRangeException(nameof(amount), amount.Amount, "An extra payment must be positive.");
+        }
+
+        if (amount.Round() != amount)
+        {
+            throw new ArgumentException("An extra payment is a whole number of minor units (øre, cents).", nameof(amount));
         }
 
         if (until < from)
@@ -69,6 +79,29 @@ public sealed class ExtraPayments
     public IReadOnlyList<ExtraPayment> OneOff { get; }
 
     public IReadOnlyList<MonthlyExtraPayment> Monthly { get; }
+
+    /// <summary>Rejects extras the schedule would otherwise skip: another currency, or outside the loan.</summary>
+    internal void CheckFits(Loan loan)
+    {
+        var currency = loan.Principal.Currency;
+        foreach (var amount in OneOff.Select(extra => extra.Amount).Concat(Monthly.Select(extra => extra.Amount)))
+        {
+            if (amount.Currency != currency)
+            {
+                throw new CurrencyMismatchException(currency, amount.Currency);
+            }
+        }
+
+        if (OneOff.Any(extra => extra.Date <= loan.Start || extra.Date > loan.LastPaymentDate))
+        {
+            throw new ArgumentException($"A one-off extra payment falls outside the loan: after {loan.Start:yyyy-MM-dd}, up to {loan.LastPaymentDate:yyyy-MM-dd}.");
+        }
+
+        if (Monthly.Any(extra => extra.From > loan.LastPaymentDate || extra.Until < loan.FirstPaymentDate))
+        {
+            throw new ArgumentException($"A monthly extra payment falls outside the loan's payments, {loan.FirstPaymentDate:yyyy-MM-dd} to {loan.LastPaymentDate:yyyy-MM-dd}.");
+        }
+    }
 
     /// <summary>
     /// The extra paid with the payment on <paramref name="paymentDate"/>: the one-off payments dated

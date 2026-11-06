@@ -1,3 +1,4 @@
+using System.Globalization;
 using FinanceGoals.Domain.Currencies;
 using FinanceGoals.Domain.Loans;
 using FsCheck;
@@ -55,13 +56,12 @@ public sealed class ExtraPaymentTests
 
         // After the June extra the 5 845,90 payment needs fewer months; from the January 2027 interest
         // month (paid 1 February) the payment is PMT(6 % / 12, those months less the ones paid, balance).
-        var june = schedule.Single(i => i.Date == new DateOnly(2026, 6, 1));
-        var january = schedule.Single(i => i.Date == new DateOnly(2027, 1, 1));
-        var february = schedule.Single(i => i.Date == new DateOnly(2027, 2, 1));
-        var monthsLeft = LoanSchedule.PaymentsToRepay(june.Balance.Amount, 0.05m / 12m, 5_845.90m) - 7;
-        var expected = decimal.Round(LoanSchedule.AnnuityPayment(january.Balance.Amount, 0.06m / 12m, monthsLeft), 2, MidpointRounding.AwayFromZero);
-        february.Payment.Amount.ShouldBe(expected);
-        schedule.Count.ShouldBe(february.Number + monthsLeft - 1);
+        // NPER(5 % / 12, 5 845,90, 791 533,57) is 199.73, so 200 months from July and 193 left in
+        // February: PMT(6 % / 12, 193, 773 474,18) is 6 256,87, and the loan ends with payment 205.
+        schedule.Single(i => i.Date == new DateOnly(2026, 6, 1)).Balance.ShouldBe(Nok(791_533.57m));
+        schedule.Single(i => i.Date == new DateOnly(2027, 1, 1)).Balance.ShouldBe(Nok(773_474.18m));
+        schedule.Skip(12).SkipLast(1).ShouldAllBe(i => i.Payment.Amount == 6_256.87m);
+        schedule.Count.ShouldBe(205);
         schedule[^1].Balance.Amount.ShouldBe(0m);
     }
 
@@ -87,12 +87,60 @@ public sealed class ExtraPaymentTests
     }
 
     [TestMethod]
-    public void An_extra_in_another_currency_is_rejected()
+    public void The_last_payment_after_an_extra_is_no_larger_than_the_regular_payment()
+    {
+        // A month whose leftover is tens of kroner is a month of its own, not added to the last payment.
+        var loan = Annuity(4_616_087m, 0.1315m, 209);
+
+        var schedule = LoanSchedule.Calculate(loan, OneOff(new ExtraPayment(new DateOnly(2029, 12, 29), Nok(1_615_630.45m))));
+
+        schedule[^1].Payment.Amount.ShouldBeLessThanOrEqualTo(schedule[0].Payment.Amount);
+        schedule.Count.ShouldBe(115);
+    }
+
+    [TestMethod]
+    public void An_extra_in_another_currency_is_rejected_even_after_the_loan_is_repaid()
     {
         var eur = new Currency("EUR", 2);
+        var loan = Annuity(100_000m, 0.05m, 120);
 
-        Should.Throw<CurrencyMismatchException>(() =>
-            LoanSchedule.Calculate(Annuity(100_000m, 0.05m, 120), OneOff(new ExtraPayment(_firstPayment, new Money(100m, eur)))));
+        Should.Throw<CurrencyMismatchException>(() => LoanSchedule.Calculate(loan, OneOff(new ExtraPayment(_firstPayment, new Money(100m, eur)))));
+        Should.Throw<CurrencyMismatchException>(() => LoanSchedule.Calculate(loan,
+            new ExtraPayments([new ExtraPayment(_firstPayment, Nok(200_000m))], [new MonthlyExtraPayment(new Money(1m, eur), new DateOnly(2030, 1, 1))])));
+    }
+
+    [TestMethod]
+    [DataRow("2026-01-01")]
+    [DataRow("2025-12-01")]
+    [DataRow("2036-01-02")]
+    public void A_one_off_extra_outside_the_loan_is_rejected(string date)
+    {
+        var loan = Annuity(100_000m, 0.05m, 120);
+
+        Should.Throw<ArgumentException>(() => LoanSchedule.Calculate(loan, OneOff(new ExtraPayment(DateOnly.Parse(date, CultureInfo.InvariantCulture), Nok(5_000m)))));
+    }
+
+    [TestMethod]
+    public void An_extra_must_be_whole_minor_units()
+    {
+        Should.Throw<ArgumentException>(() => new ExtraPayment(_firstPayment, Nok(1_000.005m)));
+        Should.Throw<ArgumentException>(() => new MonthlyExtraPayment(Nok(0.001m), _firstPayment));
+    }
+
+    private static decimal AnnuityFactor(decimal monthlyRate, int months)
+    {
+        if (monthlyRate == 0)
+        {
+            return months;
+        }
+
+        var growth = 1m;
+        for (var i = 0; i < months; i++)
+        {
+            growth *= 1 + monthlyRate;
+        }
+
+        return (growth - 1) / monthlyRate;
     }
 
     [TestMethod]
@@ -133,7 +181,7 @@ public sealed class ExtraPaymentTests
             from extraPercent in Gen.Choose(1, 120)
             from monthly in Gen.Choose(0, 20_000)
             select (Principal: (decimal)principal, Rate: basisPoints / 10_000m, Months: months,
-                ExtraDate: _start.AddMonths(extraMonth).AddDays(-3), Extra: principal * extraPercent / 100m, Monthly: (decimal)monthly));
+                ExtraDate: _start.AddMonths(Math.Min(extraMonth, months)).AddDays(-3), Extra: principal * extraPercent / 100m, Monthly: (decimal)monthly));
 
         Prop.ForAll(cases, c =>
             {
@@ -149,6 +197,8 @@ public sealed class ExtraPaymentTests
                     && schedule[^1].Balance.Amount == 0m
                     && schedule.All(i => i.Balance.Amount >= 0m && i.Principal.Amount >= 0m)
                     && schedule.SkipLast(1).All(i => i.Payment.Amount <= payment)
+                    // The last payment takes only rounding residue: up to an øre a month, grown at the rate.
+                    && schedule[^1].Payment.Amount <= payment + (0.01m * AnnuityFactor(c.Rate / 12m, c.Months))
                     && schedule.Sum(i => i.Interest.Amount) <= baseline.Sum(i => i.Interest.Amount);
             })
             .QuickCheckThrowOnFailure();
