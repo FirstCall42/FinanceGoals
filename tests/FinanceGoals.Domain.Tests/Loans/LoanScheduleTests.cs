@@ -164,6 +164,40 @@ public sealed class LoanScheduleTests
         first.Total.ShouldBe(new Money(9_109.68m, _nok));
     }
 
+    private static Loan StraightLine(decimal principal, decimal rate, int months) =>
+        new("Serie", new Money(principal, _nok), _firstPayment, months,
+            [new LoanPeriod(_start, RateType.Variable, RepaymentType.StraightLine, [new RateChange(_start, rate)])]);
+
+    [TestMethod]
+    public void A_straight_line_loan_repays_the_same_principal_so_payments_fall()
+    {
+        // Known answer: 120 000 over 12 months at 6 % (30/360): 10 000 a month plus interest on what is
+        // left, 600 in the first month, 50 less each month; 0,005 x 10 000 x (12 + 11 + ... + 1) = 3 900 in all.
+        var schedule = LoanSchedule.Calculate(Thirty360(StraightLine(120_000m, 0.06m, 12)));
+
+        schedule.Count.ShouldBe(12);
+        schedule.ShouldAllBe(i => i.Principal.Amount == 10_000m);
+        schedule[0].Payment.ShouldBe(new Money(10_600m, _nok));
+        schedule[1].Payment.ShouldBe(new Money(10_550m, _nok));
+        schedule[11].Payment.ShouldBe(new Money(10_050m, _nok));
+        schedule.Sum(i => i.Interest.Amount).ShouldBe(3_900m);
+        schedule[^1].Balance.Amount.ShouldBe(0m);
+    }
+
+    [TestMethod]
+    public void An_extra_payment_on_a_straight_line_loan_lowers_the_later_payments_and_keeps_the_end()
+    {
+        var extras = new ExtraPayments([new ExtraPayment(new DateOnly(2026, 4, 1), new Money(20_000m, _nok))], []);
+
+        var schedule = LoanSchedule.Calculate(Thirty360(StraightLine(120_000m, 0.06m, 12)), extras);
+
+        // After two payments 100 000 is left; the third pays 10 000 and the extra 20 000, leaving 70 000 over 9 months.
+        schedule[3].Principal.ShouldBe(new Money(7_777.78m, _nok));
+        schedule.Count.ShouldBe(12);
+        schedule[^1].Date.ShouldBe(new DateOnly(2027, 1, 1));
+        schedule[^1].Balance.Amount.ShouldBe(0m);
+    }
+
     [TestMethod]
     public void An_interest_only_period_repays_nothing_then_the_annuity_starts()
     {

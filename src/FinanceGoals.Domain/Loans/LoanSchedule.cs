@@ -44,6 +44,8 @@ public sealed record PayoffComparison(PayoffSummary WithoutExtra, PayoffSummary 
 ///   the extra (or missing) days of interest, not the loan;
 /// - an annuity payment is recalculated over the remaining term whenever the rate changes, like
 ///   Excel's PMT;
+/// - a straight-line (serielån) payment repays the balance divided by the months left, so payments fall;
+///   an extra payment lowers the later payments and the end date stays;
 /// - an extra payment is paid with the regular payment on or after its date and keeps the payment:
 ///   the remaining term shrinks (NPER at the current rate, rounded up to whole months). Interest-only
 ///   months push that shortened end back; an extra during interest-only lowers the later annuity instead;
@@ -103,12 +105,18 @@ public static class LoanSchedule
                     // and then the shortfall (negative principal) is added to the balance.
                     principal = annuityPayment - monthInterest;
                     break;
+                case RepaymentType.StraightLine:
+                    // The same principal every month: what is left over the months left on the contract. Extra
+                    // payments lower the balance, so they lower the later payments instead of shortening the loan.
+                    principal = Round(balance / contractLeft, currency);
+                    annuityRate = null;
+                    break;
                 case RepaymentType.InterestOnly:
                     principal = 0;
                     annuityRate = null;
                     break;
                 default:
-                    throw new NotSupportedException($"{period.RepaymentType} schedules come with #42.");
+                    throw new NotSupportedException($"{period.RepaymentType} schedules are not supported.");
             }
 
             // The contract end clears the loan in any period; a shortened end only in a repayment month.
