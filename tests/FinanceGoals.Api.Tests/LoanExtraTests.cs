@@ -135,7 +135,7 @@ public sealed class LoanExtraTests
     }
 
     [TestMethod]
-    public async Task A_loan_whose_schedule_is_not_supported_yet_refuses_extras_with_a_400()
+    public async Task A_straight_line_loan_takes_extras()
     {
         var profileId = await ProfileOfAsync("extra-owner-5");
         var created = await SendAsync(HttpMethod.Post, $"/api/profiles/{profileId}/loans", "extra-owner-5", new
@@ -152,7 +152,7 @@ public sealed class LoanExtraTests
 
         var extra = await SendAsync(HttpMethod.Post, $"/api/profiles/{profileId}/loans/{loanId}/extras/one-off", "extra-owner-5", new { date = "2026-06-15", amount = 1_000m });
 
-        extra.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        extra.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
     [TestMethod]
