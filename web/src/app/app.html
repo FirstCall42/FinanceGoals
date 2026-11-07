@@ -14,8 +14,10 @@
     <span>FinanceGoals</span>
   </a>
   <div class="actions">
-    <app-currency-switcher />
-    <app-sign-in />
+    @if (showApp()) {
+      <app-currency-switcher />
+      <app-sign-in />
+    }
     <button
       type="button"
       class="icon-button"
@@ -37,24 +39,34 @@
     </button>
   </div>
 </header>
-<div class="layout">
-  <nav class="sidenav" aria-label="Main">
-    <a
-      routerLink="/"
-      routerLinkActive="active"
-      [routerLinkActiveOptions]="{ exact: true }"
-      ariaCurrentWhenActive="page"
-      >Overview</a
-    >
-    <a routerLink="/net-worth" routerLinkActive="active" ariaCurrentWhenActive="page">Net worth</a>
-    <a routerLink="/accounts" routerLinkActive="active" ariaCurrentWhenActive="page">Accounts</a>
-    <a routerLink="/balances" routerLinkActive="active" ariaCurrentWhenActive="page">Balances</a>
-    <a routerLink="/calculator" routerLinkActive="active" ariaCurrentWhenActive="page"
-      >Mortgage calculator</a
-    >
-    <a routerLink="/settings" routerLinkActive="active" ariaCurrentWhenActive="page">Settings</a>
-  </nav>
-  <main class="content">
-    <router-outlet />
+@if (showApp()) {
+  <div class="layout">
+    <nav class="sidenav" aria-label="Main">
+      <a
+        routerLink="/"
+        routerLinkActive="active"
+        [routerLinkActiveOptions]="{ exact: true }"
+        ariaCurrentWhenActive="page"
+        >Overview</a
+      >
+      <a routerLink="/net-worth" routerLinkActive="active" ariaCurrentWhenActive="page"
+        >Net worth</a
+      >
+      <a routerLink="/accounts" routerLinkActive="active" ariaCurrentWhenActive="page">Accounts</a>
+      <a routerLink="/balances" routerLinkActive="active" ariaCurrentWhenActive="page">Balances</a>
+      <a routerLink="/calculator" routerLinkActive="active" ariaCurrentWhenActive="page"
+        >Mortgage calculator</a
+      >
+      <a routerLink="/settings" routerLinkActive="active" ariaCurrentWhenActive="page">Settings</a>
+    </nav>
+    <main class="content">
+      <router-outlet />
+    </main>
+  </div>
+} @else {
+  <main class="login">
+    <h1>Sign in to FinanceGoals</h1>
+    <p>Your household's loans, balances and net worth. Sign in with Google to continue.</p>
+    <app-sign-in />
   </main>
-</div>
+}
