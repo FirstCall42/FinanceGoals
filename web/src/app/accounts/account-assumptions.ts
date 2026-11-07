@@ -156,8 +156,12 @@ export class AccountAssumptions {
     }
     const saved = this.saved().find((a) => a.accountId === account.id);
     return {
-      returnPercent: saved?.returnPercent == null ? '' : String(saved.returnPercent),
-      contribution: saved?.monthlyContribution == null ? '' : String(saved.monthlyContribution),
+      returnPercent:
+        saved?.returnPercent == null ? '' : String(saved.returnPercent).replace('.', ','),
+      contribution:
+        saved?.monthlyContribution == null
+          ? ''
+          : String(saved.monthlyContribution).replace('.', ','),
     };
   }
 
