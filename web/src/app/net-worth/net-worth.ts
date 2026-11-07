@@ -127,9 +127,9 @@ import { Forecast, NetWorth, NetWorthPoint, NetWorthService } from './net-worth.
             <app-net-worth-chart
               [points]="history()"
               [currency]="nw.currency"
-              [forecast]="forecast()?.points ?? []"
+              [forecast]="shownForecast()?.points ?? []"
             />
-            @if (forecast(); as f) {
+            @if (shownForecast(); as f) {
               @if (f.missingRates.length > 0) {
                 <app-missing-rate [currencyCodes]="f.missingRates" [date]="f.from" />
                 <p class="note">
@@ -144,6 +144,11 @@ import { Forecast, NetWorth, NetWorthPoint, NetWorthService } from './net-worth.
                 The forecast grows each account from its latest balance with the return and monthly
                 contribution set under Accounts, at today's exchange rates. The low and high lines
                 are {{ f.spreadPoints }} percentage points either side. Loans are not in it yet.
+              </p>
+            }
+            @if (forecast() && !shownForecast()) {
+              <p class="note">
+                The forecast starts today, so it is left out while another date is picked.
               </p>
             }
             @if (forecastError(); as message) {
@@ -327,6 +332,10 @@ export class NetWorthPage {
   protected readonly horizon = signal(10);
   protected readonly forecast = signal<Forecast | undefined>(undefined);
   protected readonly forecastError = signal<string | undefined>(undefined);
+  /** The forecast continues the history only when the history ends today, where the forecast starts. */
+  protected readonly shownForecast = computed(() =>
+    this.date() === isoToday() ? this.forecast() : undefined,
+  );
   private forecasts = 0;
 
   /** The oldest exchange rate behind any converted line, to say which day's rates the figures use. */

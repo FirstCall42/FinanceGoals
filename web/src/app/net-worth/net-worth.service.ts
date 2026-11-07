@@ -106,7 +106,7 @@ export class NetWorthService {
     return {
       currency: result.currency,
       from: result.from,
-      spreadPoints: Number(result.returnSpread) * 100,
+      spreadPoints: Math.round(Number(result.returnSpread) * 10000) / 100,
       missingRates: result.missingRates,
       capped: result.capped,
       points: result.points.map((p) => ({

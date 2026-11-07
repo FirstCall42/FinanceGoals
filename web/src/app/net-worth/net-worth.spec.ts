@@ -272,6 +272,31 @@ describe('Net worth page', () => {
     });
   });
 
+  it('leaves the forecast out while a past date is picked, as it starts today', async () => {
+    const fixture = await open();
+    forecastRequest().flush(forecast());
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelectorAll('polyline.forecast'),
+      ).toHaveLength(1);
+    });
+
+    const date = (fixture.nativeElement as HTMLElement).querySelector(
+      'input[type=text]',
+    ) as HTMLInputElement;
+    date.value = '15.01.2024';
+    date.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    answer('NOK', netWorth());
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      const page = fixture.nativeElement as HTMLElement;
+      expect(page.querySelectorAll('polyline.forecast')).toHaveLength(0);
+      expect(page.textContent).toContain('The forecast starts today');
+    });
+  });
+
   it('asks again when another horizon is picked, and not at all for none', async () => {
     const fixture = await open();
     forecastRequest().flush(forecast());
