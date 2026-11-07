@@ -45,7 +45,7 @@ describe('Expected growth', () => {
       fixture.detectChanges();
       expect(
         (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLInputElement>('input')[2].value,
-      ).toBe('6.5');
+      ).toBe('6,5');
     });
     return fixture;
   }
