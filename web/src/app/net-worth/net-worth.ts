@@ -8,7 +8,7 @@ import { MissingRate } from '../money/missing-rate';
 import { MoneyPipe } from '../money/money.pipe';
 import { messageOf } from '../profile/profile.service';
 import { NetWorthChart } from './net-worth-chart';
-import { NetWorth, NetWorthPoint, NetWorthService } from './net-worth.service';
+import { Forecast, NetWorth, NetWorthPoint, NetWorthService } from './net-worth.service';
 
 /**
  * Net worth (#37): the accounts' balances on a date, converted to the currency picked with the
@@ -114,7 +114,41 @@ import { NetWorth, NetWorthPoint, NetWorthService } from './net-worth.service';
 
           @if (history().length > 0) {
             <h2>Month by month</h2>
-            <app-net-worth-chart [points]="history()" [currency]="nw.currency" />
+            <label class="horizon">
+              <span>Forecast</span>
+              <select (change)="horizon.set(+text($event))">
+                @for (years of horizons; track years) {
+                  <option [value]="years" [selected]="years === horizon()">
+                    {{ years === 0 ? 'None' : years + ' years' }}
+                  </option>
+                }
+              </select>
+            </label>
+            <app-net-worth-chart
+              [points]="history()"
+              [currency]="nw.currency"
+              [forecast]="forecast()?.points ?? []"
+            />
+            @if (forecast(); as f) {
+              @if (f.missingRates.length > 0) {
+                <app-missing-rate [currencyCodes]="f.missingRates" [date]="f.from" />
+                <p class="note">
+                  The forecast leaves out the accounts in {{ f.missingRates.join(' and ') }} until a
+                  rate exists.
+                </p>
+              }
+              @if (f.capped) {
+                <p class="note">An amount in the forecast hit the upper limit and stops there.</p>
+              }
+              <p class="note">
+                The forecast grows each account from its latest balance with the return and monthly
+                contribution set under Accounts, at today's exchange rates. The low and high lines
+                are {{ f.spreadPoints }} percentage points either side. Loans are not in it yet.
+              </p>
+            }
+            @if (forecastError(); as message) {
+              <p class="error" role="alert">{{ message }}</p>
+            }
             @if (historyMissing(); as missing) {
               <app-missing-rate [currencyCodes]="missing.codes" [date]="missing.from" />
               <p class="note">
@@ -289,6 +323,11 @@ export class NetWorthPage {
   protected readonly current = signal<NetWorth | undefined>(undefined);
   protected readonly history = signal<readonly NetWorthPoint[]>([]);
   protected readonly error = signal<string | undefined>(undefined);
+  protected readonly horizons = [0, 5, 10, 20, 30];
+  protected readonly horizon = signal(10);
+  protected readonly forecast = signal<Forecast | undefined>(undefined);
+  protected readonly forecastError = signal<string | undefined>(undefined);
+  private forecasts = 0;
 
   /** The oldest exchange rate behind any converted line, to say which day's rates the figures use. */
   protected readonly rateDate = computed(() => {
@@ -323,6 +362,15 @@ export class NetWorthPage {
 
   constructor() {
     void this.currencies.load();
+    // The forecast starts today whatever date is picked, so only the household, currency and horizon matter.
+    effect(() => {
+      const p = this.profile();
+      const currency = this.display.current();
+      const years = this.horizon();
+      if (p) {
+        void this.loadForecast(p.id, currency, years);
+      }
+    });
     // Reloads when the household, the date or the currency picked with the switcher changes.
     effect(() => {
       const p = this.profile();
@@ -332,6 +380,27 @@ export class NetWorthPage {
         void this.load(p.id, currency, date);
       }
     });
+  }
+
+  private async loadForecast(profileId: number, currency: string, years: number): Promise<void> {
+    const request = ++this.forecasts;
+    if (years === 0) {
+      this.forecast.set(undefined);
+      this.forecastError.set(undefined);
+      return;
+    }
+    try {
+      const forecast = await this.service.forecast(profileId, currency, years * 12);
+      if (request === this.forecasts) {
+        this.forecast.set(forecast);
+        this.forecastError.set(undefined);
+      }
+    } catch (error) {
+      if (request === this.forecasts) {
+        this.forecast.set(undefined);
+        this.forecastError.set(messageOf(error));
+      }
+    }
   }
 
   protected text(event: Event): string {

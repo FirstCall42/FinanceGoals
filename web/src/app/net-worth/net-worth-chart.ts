@@ -1,5 +1,5 @@
 import { Component, computed, input } from '@angular/core';
-import { NetWorthPoint } from './net-worth.service';
+import { ForecastPoint, NetWorthPoint } from './net-worth.service';
 
 const width = 640;
 const height = 220;
@@ -24,6 +24,11 @@ const pad = { left: 8, right: 8, top: 12, bottom: 20 };
           [attr.y1]="s.zero"
           [attr.y2]="s.zero"
         />
+        @if (s.low) {
+          <polyline class="range" [attr.points]="s.low" />
+          <polyline class="range" [attr.points]="s.high" />
+          <polyline class="forecast" [attr.points]="s.expected" />
+        }
         <polyline class="liquid" [attr.points]="s.liquid" />
         <polyline class="total" [attr.points]="s.total" />
         @for (d of s.dots; track d.x) {
@@ -36,6 +41,9 @@ const pad = { left: 8, right: 8, top: 12, bottom: 20 };
       </svg>
       <p class="legend">
         <span class="key total"></span> Net worth <span class="key liquid"></span> Liquid
+        @if (s.low) {
+          <span class="key forecast"></span> Forecast <span class="key range"></span> Low and high
+        }
         @if (s.anyMissing) {
           <span class="key hollow"></span> Left out a currency without a rate
         }
@@ -62,6 +70,15 @@ const pad = { left: 8, right: 8, top: 12, bottom: 20 };
     .liquid {
       stroke: var(--fg-muted);
       stroke-dasharray: 6 4;
+    }
+    .forecast {
+      stroke: var(--fg-accent);
+      stroke-dasharray: 2 4;
+    }
+    .range {
+      stroke: var(--fg-muted);
+      stroke-width: 1.5;
+      stroke-dasharray: 2 4;
     }
     .dot {
       fill: var(--fg-accent);
@@ -94,6 +111,12 @@ const pad = { left: 8, right: 8, top: 12, bottom: 20 };
     .key.liquid {
       border-top: 3px dashed var(--fg-muted);
     }
+    .key.forecast {
+      border-top: 3px dotted var(--fg-accent);
+    }
+    .key.range {
+      border-top: 2px dotted var(--fg-muted);
+    }
     .key.hollow {
       width: 8px;
       height: 8px;
@@ -105,6 +128,8 @@ const pad = { left: 8, right: 8, top: 12, bottom: 20 };
 export class NetWorthChart {
   readonly points = input.required<readonly NetWorthPoint[]>();
   readonly currency = input.required<string>();
+  /** The forecast that continues the history, drawn as an expected line with a low and a high one. */
+  readonly forecast = input<readonly ForecastPoint[]>([]);
 
   protected readonly w = width;
   protected readonly h = height;
@@ -112,28 +137,46 @@ export class NetWorthChart {
 
   protected readonly shape = computed(() => {
     const pts = this.points();
+    const ahead = this.forecast();
     if (pts.length < 2) {
       return undefined;
     }
-    const time = pts.map((p) => Date.parse(`${p.date}T00:00:00Z`));
-    const values = pts.flatMap((p) => [p.total, p.liquid]);
+    const at = (date: string) => Date.parse(`${date}T00:00:00Z`);
+    const time = pts.map((p) => at(p.date));
+    const lastTime = ahead.length > 0 ? at(ahead[ahead.length - 1].date) : time[time.length - 1];
+    const values = [
+      ...pts.flatMap((p) => [p.total, p.liquid]),
+      ...ahead.flatMap((p) => [p.low, p.high]),
+    ];
     const lo = Math.min(0, ...values);
     const hi = Math.max(0, ...values);
     const span = hi - lo || 1;
     const t0 = time[0];
-    const tSpan = time[time.length - 1] - t0 || 1;
+    const tSpan = lastTime - t0 || 1;
     const x = (i: number) => pad.left + ((time[i] - t0) / tSpan) * (width - pad.left - pad.right);
     const y = (v: number) => pad.top + (1 - (v - lo) / span) * (height - pad.top - pad.bottom);
     const line = (pick: (p: NetWorthPoint) => number) =>
       pts.map((p, i) => `${x(i).toFixed(1)},${y(pick(p)).toFixed(1)}`).join(' ');
+    const xAt = (date: string) =>
+      pad.left + ((at(date) - t0) / tSpan) * (width - pad.left - pad.right);
+    // The forecast starts from where the history ends, so the lines join.
+    const ahead3 = (pick: (p: ForecastPoint) => number) =>
+      ahead.length === 0
+        ? undefined
+        : [`${x(pts.length - 1).toFixed(1)},${y(pts[pts.length - 1].total).toFixed(1)}`]
+            .concat(ahead.map((p) => `${xAt(p.date).toFixed(1)},${y(pick(p)).toFixed(1)}`))
+            .join(' ');
     return {
       total: line((p) => p.total),
       liquid: line((p) => p.liquid),
+      low: ahead3((p) => p.low),
+      expected: ahead3((p) => p.expected),
+      high: ahead3((p) => p.high),
       zero: y(0),
       dots: pts.map((p, i) => ({ x: x(i), y: y(p.total), missing: p.missingRates.length > 0 })),
       anyMissing: pts.some((p) => p.missingRates.length > 0),
       from: pts[0].date,
-      to: pts[pts.length - 1].date,
+      to: ahead.length > 0 ? ahead[ahead.length - 1].date : pts[pts.length - 1].date,
     };
   });
 }

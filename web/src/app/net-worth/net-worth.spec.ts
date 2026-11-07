@@ -57,6 +57,19 @@ const history = [
   },
 ];
 
+const forecast = (over: object = {}) => ({
+  currency: 'NOK',
+  from: '2026-11-06',
+  returnSpread: 0.02,
+  capped: false,
+  missingRates: [],
+  points: [
+    { date: '2026-12-06', low: 4100000, expected: 4110000, high: 4120000 },
+    { date: '2027-01-06', low: 4200000, expected: 4220000, high: 4240000 },
+  ],
+  ...over,
+});
+
 describe('Net worth page', () => {
   let http: HttpTestingController;
 
@@ -67,7 +80,13 @@ describe('Net worth page', () => {
     http = TestBed.inject(HttpTestingController);
   });
 
-  afterEach(() => http.verify());
+  afterEach(() => {
+    // The forecast is asked for beside the figures; most tests are about the figures.
+    http
+      .match((r) => r.url === '/api/profiles/4/net-worth/forecast')
+      .forEach((r) => r.flush(forecast()));
+    http.verify();
+  });
 
   const signIn = () =>
     TestBed.inject(AuthService).profiles.set([
@@ -219,6 +238,99 @@ describe('Net worth page', () => {
       expect(
         (fixture.nativeElement as HTMLElement).querySelector('[role=alert]')?.textContent,
       ).toContain('supported currencies');
+    });
+  });
+
+  const open = async () => {
+    signIn();
+    const fixture = TestBed.createComponent(NetWorthPage);
+    http.expectOne('/api/currencies').flush([]);
+    await fixture.whenStable();
+    answer('NOK', netWorth());
+    return fixture;
+  };
+
+  const forecastRequest = () =>
+    http.expectOne((r) => r.url === '/api/profiles/4/net-worth/forecast');
+
+  it('continues the history with a forecast of 10 years and a low and high line', async () => {
+    const fixture = await open();
+    const request = forecastRequest();
+    expect(request.request.params.get('months')).toBe('120');
+    expect(request.request.params.get('currency')).toBe('NOK');
+    request.flush(forecast());
+
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      const page = fixture.nativeElement as HTMLElement;
+      expect(page.querySelectorAll('polyline.range')).toHaveLength(2);
+      expect(page.querySelectorAll('polyline.forecast')).toHaveLength(1);
+      expect(page.textContent).toContain('2 percentage points either side');
+      expect(page.querySelector('svg[role=img]')?.getAttribute('aria-label')).toContain(
+        '2027-01-06',
+      );
+    });
+  });
+
+  it('asks again when another horizon is picked, and not at all for none', async () => {
+    const fixture = await open();
+    forecastRequest().flush(forecast());
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector('.horizon select'),
+      ).not.toBeNull();
+    });
+    const select = (fixture.nativeElement as HTMLElement).querySelector(
+      '.horizon select',
+    ) as HTMLSelectElement;
+
+    select.value = '5';
+    select.dispatchEvent(new Event('change'));
+    await fixture.whenStable();
+    const five = forecastRequest();
+    expect(five.request.params.get('months')).toBe('60');
+    five.flush(forecast());
+    await fixture.whenStable();
+
+    select.value = '0';
+    select.dispatchEvent(new Event('change'));
+    await fixture.whenStable();
+    fixture.detectChanges();
+    http.expectNone((r) => r.url === '/api/profiles/4/net-worth/forecast');
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('polyline.forecast'),
+    ).toHaveLength(0);
+  });
+
+  it('names a currency without a rate instead of guessing, and keeps the figures if the forecast fails', async () => {
+    const fixture = await open();
+    forecastRequest().flush(forecast({ missingRates: ['RON'] }));
+
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect((fixture.nativeElement as HTMLElement).textContent).toContain(
+        'The forecast leaves out the accounts in RON',
+      );
+    });
+
+    const select = (fixture.nativeElement as HTMLElement).querySelector(
+      '.horizon select',
+    ) as HTMLSelectElement;
+    select.value = '20';
+    select.dispatchEvent(new Event('change'));
+    await fixture.whenStable();
+    forecastRequest().flush(
+      { errors: { months: ['Ask for 1 to 600 months.'] } },
+      { status: 400, statusText: 'Bad Request' },
+    );
+
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      const page = fixture.nativeElement as HTMLElement;
+      expect(page.querySelector('[role=alert]')?.textContent).toContain('Ask for 1 to 600 months.');
+      expect(page.textContent).toContain('Month by month');
+      expect(page.querySelectorAll('polyline.forecast')).toHaveLength(0);
     });
   });
 });

@@ -1,5 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { Api } from '../api/api';
+import { getBalanceForecast } from '../api/fn/finance-goals-api/get-balance-forecast';
 import { getNetWorth } from '../api/fn/finance-goals-api/get-net-worth';
 import { getNetWorthHistory } from '../api/fn/finance-goals-api/get-net-worth-history';
 import { AccountType } from '../api/models/account-type';
@@ -40,6 +41,27 @@ export interface NetWorthPoint {
   readonly rateDate: string | null;
 }
 
+/** One month of the forecast: the total with a low, an expected and a high return. */
+export interface ForecastPoint {
+  readonly date: string;
+  readonly low: number;
+  readonly expected: number;
+  readonly high: number;
+}
+
+/** The balance forecast (#143): all accounts from their latest balances, at today's exchange rates. */
+export interface Forecast {
+  readonly currency: string;
+  readonly from: string;
+  /** How far the low and high lines sit from the expected return, in percentage points. */
+  readonly spreadPoints: number;
+  /** Currencies without an exchange rate; their accounts are left out. */
+  readonly missingRates: readonly string[];
+  /** True when an extreme input hit the cap the API stops amounts at. */
+  readonly capped: boolean;
+  readonly points: readonly ForecastPoint[];
+}
+
 /** Net worth and its monthly history (#37), through the generated API client. */
 @Injectable({ providedIn: 'root' })
 export class NetWorthService {
@@ -77,5 +99,22 @@ export class NetWorthService {
       missingRates: p.missingRates,
       rateDate: p.rateDate,
     }));
+  }
+
+  async forecast(profileId: number, currency: string, months: number): Promise<Forecast> {
+    const result = await this.api.invoke(getBalanceForecast, { profileId, currency, months });
+    return {
+      currency: result.currency,
+      from: result.from,
+      spreadPoints: Number(result.returnSpread) * 100,
+      missingRates: result.missingRates,
+      capped: result.capped,
+      points: result.points.map((p) => ({
+        date: p.date,
+        low: Number(p.low),
+        expected: Number(p.expected),
+        high: Number(p.high),
+      })),
+    };
   }
 }
