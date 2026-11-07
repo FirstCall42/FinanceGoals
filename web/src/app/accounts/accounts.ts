@@ -4,6 +4,7 @@ import { CurrencyService } from '../currency/currency.service';
 import { DisplayCurrencyService } from '../currency/display-currency.service';
 import { messageOf } from '../profile/profile.service';
 import { Account, AccountService, AccountType, accountTypes } from './account.service';
+import { AccountAssumptions } from './account-assumptions';
 
 interface Draft {
   name: string;
@@ -17,6 +18,7 @@ interface Draft {
  */
 @Component({
   selector: 'app-accounts',
+  imports: [AccountAssumptions],
   template: `
     <section class="panel" aria-labelledby="accounts-title">
       <h1 id="accounts-title">Accounts</h1>
@@ -122,6 +124,9 @@ interface Draft {
               </li>
             }
           </ul>
+          @if (profile(); as p) {
+            <app-account-assumptions [profileId]="p.id" [accounts]="activeAccounts()" />
+          }
         }
       }
     </section>
@@ -250,6 +255,7 @@ export class Accounts {
   protected readonly profile = computed(() => this.auth.profiles()[0]);
   protected readonly accounts = signal<readonly Account[]>([]);
   protected readonly showArchived = signal(false);
+  protected readonly activeAccounts = computed(() => this.accounts().filter((a) => !a.archived));
   protected readonly busy = signal(false);
   protected readonly error = signal<string | undefined>(undefined);
   protected readonly draft = signal<Draft>({ name: '', type: 'Current', currencyCode: 'NOK' });

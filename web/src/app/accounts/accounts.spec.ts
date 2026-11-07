@@ -22,7 +22,11 @@ describe('Accounts page', () => {
     http = TestBed.inject(HttpTestingController);
   });
 
-  afterEach(() => http.verify());
+  afterEach(() => {
+    // The expected-growth section asks for the saved assumptions; these tests are about the list.
+    http.match('/api/profiles/4/account-assumptions').forEach((r) => r.flush([]));
+    http.verify();
+  });
 
   const signIn = () =>
     TestBed.inject(AuthService).profiles.set([
