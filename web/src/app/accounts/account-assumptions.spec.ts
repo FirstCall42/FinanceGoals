@@ -114,3 +114,40 @@ describe('Expected growth', () => {
     http.expectNone((r) => r.method === 'PUT');
   });
 });
+
+describe('Expected growth when the API refuses', () => {
+  it('shows the API message and keeps what was typed', async () => {
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    });
+    const http = TestBed.inject(HttpTestingController);
+    const fixture = TestBed.createComponent(AccountAssumptions);
+    fixture.componentRef.setInput('profileId', 4);
+    fixture.componentRef.setInput('accounts', [buffer]);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    http.expectOne(url).flush([]);
+    const page = fixture.nativeElement as HTMLElement;
+    const input = page.querySelector<HTMLInputElement>('input')!;
+    input.value = '150';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    page.querySelector<HTMLButtonElement>('button.primary')!.click();
+    await fixture.whenStable();
+    const message = 'The return must be between -50 and 100 % with at most four decimals.';
+    http
+      .expectOne((r) => r.method === 'PUT')
+      .flush(
+        { errors: { expectedYearlyReturnPercent: [message] } },
+        { status: 400, statusText: 'Bad Request' },
+      );
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(page.querySelector('[role=alert]')?.textContent).toContain(message);
+    });
+
+    expect(page.querySelector<HTMLInputElement>('input')!.value).toBe('150');
+    http.verify();
+  });
+});
