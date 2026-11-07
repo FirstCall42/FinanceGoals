@@ -165,6 +165,58 @@ describe('Loan calculator', () => {
     });
   });
 
+  it('opens a saved loan from its latest recorded balance and says so', async () => {
+    const { fixture, page } = await openSaved();
+    const open = Array.from(page.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('Open Cabin'),
+    );
+
+    open?.click();
+    const loan = await vi.waitFor(() => http.expectOne('/api/profiles/4/loans/9'));
+    loan.flush({
+      id: 9,
+      name: 'Cabin',
+      currencyCode: 'NOK',
+      principal: 1_000_000,
+      paidOut: '2026-01-01',
+      firstPaymentDate: '2026-02-01',
+      termMonths: 120,
+      feePerPayment: 0,
+      dayCount: 'ActualActual',
+      periods: [
+        {
+          start: '2026-01-01',
+          rateType: 'Variable',
+          repaymentType: 'Annuity',
+          rates: [{ effectiveFrom: '2026-01-01', annualRatePercent: 5 }],
+        },
+      ],
+    });
+    http.expectOne('/api/profiles/4/loans/9/extras').flush({
+      currencyCode: 'NOK',
+      oneOff: [],
+      monthly: [],
+      balances: [
+        { date: '2026-03-10', amount: 990_000 },
+        { date: '2026-09-15', amount: 940_000 },
+      ],
+    });
+
+    // The latest balance starts the calculation: 940 000 left, eight payments made, 112 months to go.
+    const calculate = await vi.waitFor(() => http.expectOne('/api/loans/calculate'));
+    expect(calculate.request.body).toMatchObject({
+      principal: 940_000,
+      paidOut: '2026-09-15',
+      firstPayment: '2026-10-01',
+      termMonths: 112,
+    });
+    calculate.flush({ ...result, withoutExtraSchedule: [], withExtraSchedule: [] });
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(page.textContent).toContain('Opened Cabin from the balance recorded 15.09.2026.');
+    });
+  });
+
   it('keeps a saved loan listed and says which extras failed', async () => {
     withExtras([{ date: '2026-06-15', amount: '100 000' }]);
     const { fixture, page, save } = await openSaved();
