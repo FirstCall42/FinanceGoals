@@ -153,6 +153,24 @@ describe('Saved loans in the calculator', () => {
       expect(typeof input === 'object' && input.monthlyAmount).toBe('');
     });
 
+    it('drops a monthly extra that ends between the balance and the next payment', () => {
+      // The balance is on 15 September; the next payment is 1 October; the extra ends on 20 September.
+      const ending = { ...stored(), monthlyUntil: '2026-09-20' };
+
+      const input = inputFromBalance(ending, 360, { date: '2026-09-15', amount: 2_900_000 });
+
+      expect(typeof input === 'object' && input.monthlyAmount).toBe('');
+      expect(typeof input === 'object' && input.monthlyUntil).toBe('');
+    });
+
+    it('keeps a monthly extra that ends on or after the next payment', () => {
+      const ending = { ...stored(), monthlyUntil: '2026-10-01' };
+
+      const input = inputFromBalance(ending, 360, { date: '2026-09-15', amount: 2_900_000 });
+
+      expect(typeof input === 'object' && input.monthlyAmount).toBe('2500');
+    });
+
     it('keeps the payment day at the end of a short month', () => {
       const monthEnd = { ...stored(), firstPayment: '2026-01-31' };
 

@@ -70,6 +70,9 @@ export function inputFromBalance(
   }
 
   const left = termMonths - made;
+  const next = addMonths(loan.firstPayment, made);
+  // A monthly extra that ends before the next payment has nothing left to pay (the API refuses one).
+  const ended = loan.monthlyUntil !== '' && loan.monthlyUntil < next;
   // The rate in force on the balance day starts the new loan; later changes stay.
   const rates = [{ from: loan.paidOut, rate: loan.startRate }, ...loan.rateChanges];
   const inForce = rates.filter((c) => c.from <= balance.date).at(-1) ?? rates[0];
@@ -77,14 +80,14 @@ export function inputFromBalance(
     ...loan,
     principal: String(balance.amount),
     paidOut: balance.date,
-    firstPayment: addMonths(loan.firstPayment, made),
+    firstPayment: next,
     termYears: typed(Math.round((left / 12) * 1e4) / 1e4),
     startRate: inForce.rate,
     rateChanges: rates.filter((c) => c.from > balance.date),
     extras: loan.extras.filter((e) => e.date > balance.date),
-    monthlyFrom: loan.monthlyUntil && loan.monthlyUntil <= balance.date ? '' : loan.monthlyFrom,
-    monthlyAmount: loan.monthlyUntil && loan.monthlyUntil <= balance.date ? '' : loan.monthlyAmount,
-    monthlyUntil: loan.monthlyUntil && loan.monthlyUntil <= balance.date ? '' : loan.monthlyUntil,
+    monthlyFrom: ended ? '' : loan.monthlyFrom,
+    monthlyAmount: ended ? '' : loan.monthlyAmount,
+    monthlyUntil: ended ? '' : loan.monthlyUntil,
   };
 }
 
