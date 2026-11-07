@@ -78,4 +78,19 @@ public sealed class LoanForecastTests
 
         owed.ByMonth.ShouldBe([500m, 500m, 500m]);
     }
+
+    [TestMethod]
+    public void A_loan_paid_on_the_31st_still_follows_its_schedule_from_a_balance_before_a_short_month()
+    {
+        var start = new DateOnly(2025, 12, 31);
+        var loan = new Loan("Month end", new Money(12_000m, _nok), new DateOnly(2026, 1, 31), 12,
+            [new LoanPeriod(start, RateType.Variable, RepaymentType.StraightLine, [new RateChange(start, 0m)])], paidOut: start);
+
+        // 9 000 owed on 5 April, after the payments of 31 Jan, 28 Feb and 31 Mar: 9 payments of 1 000 are left.
+        var owed = LoanForecast.Owed(new DateOnly(2026, 4, 5), 10, _nok, [new LoanWithExtras(loan, Extras(("2026-04-05", 9_000m)))], _minorUnits, _converter);
+
+        owed.ByMonth[0].ShouldBe(9_000m);
+        owed.ByMonth[1].ShouldBe(8_000m);
+        owed.ByMonth[9].ShouldBe(0m);
+    }
 }

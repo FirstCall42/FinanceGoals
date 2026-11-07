@@ -225,15 +225,32 @@ public sealed class LoanTests
     }
 
     [TestMethod]
-    public void Starting_from_a_balance_is_refused_when_nothing_is_left_or_the_next_payment_day_does_not_exist()
+    public void Starting_from_a_balance_is_refused_when_nothing_is_left()
     {
         var loan = new Loan("Mortgage", _threeMillion, _firstPayment, 12, [Variable(_start, new RateChange(_start, 0.05m))]);
-        var endOfMonth = new Loan("Month end", _threeMillion, new DateOnly(2026, 1, 31), 12, [Variable(new DateOnly(2025, 12, 31), new RateChange(new DateOnly(2025, 12, 31), 0.05m))], paidOut: new DateOnly(2025, 12, 31));
 
         loan.StartingFrom(new DateOnly(2027, 1, 1), 100m).ShouldBeNull();
         loan.StartingFrom(new DateOnly(2026, 6, 1), 0m).ShouldBeNull();
         loan.StartingFrom(new DateOnly(2025, 12, 31), 100m).ShouldBeNull();
-        endOfMonth.StartingFrom(new DateOnly(2026, 1, 30), 100m).ShouldNotBeNull();
-        endOfMonth.StartingFrom(new DateOnly(2026, 2, 10), 100m).ShouldBeNull();
+    }
+
+    [TestMethod]
+    public void A_loan_paid_on_the_31st_keeps_that_day_when_continued_from_a_balance_in_a_short_month()
+    {
+        var paidOut = new DateOnly(2025, 12, 31);
+        var loan = new Loan("Month end", _threeMillion, new DateOnly(2026, 1, 31), 12, [Variable(paidOut, new RateChange(paidOut, 0.05m))], paidOut: paidOut);
+
+        loan.PaymentDate(2).ShouldBe(new DateOnly(2026, 2, 28));
+        loan.PaymentDate(3).ShouldBe(new DateOnly(2026, 3, 31));
+        loan.LastPaymentDate.ShouldBe(new DateOnly(2026, 12, 31));
+
+        // Recorded on 5 April: payments of 31 Jan, 28 Feb and 31 Mar are made; the next is 30 April, then 31 May again.
+        var continued = loan.StartingFrom(new DateOnly(2026, 4, 5), 2_000_000m)!;
+
+        continued.FirstPaymentDate.ShouldBe(new DateOnly(2026, 4, 30));
+        continued.TermMonths.ShouldBe(9);
+        continued.PaymentDate(2).ShouldBe(new DateOnly(2026, 5, 31));
+        continued.LastPaymentDate.ShouldBe(loan.LastPaymentDate);
+        LoanSchedule.Calculate(continued).Select(i => i.Date).Take(3).ShouldBe([new DateOnly(2026, 4, 30), new DateOnly(2026, 5, 31), new DateOnly(2026, 6, 30)]);
     }
 }
