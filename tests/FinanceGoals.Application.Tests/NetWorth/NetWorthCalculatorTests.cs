@@ -1,5 +1,6 @@
 using FinanceGoals.Application.Accounts;
 using FinanceGoals.Application.Currencies;
+using FinanceGoals.Application.Loans;
 using FinanceGoals.Application.NetWorth;
 using FinanceGoals.Domain.Currencies;
 
@@ -192,5 +193,72 @@ public sealed class NetWorthCalculatorTests
         found?.Date.ShouldBe(expected is null ? default : DateOnly.Parse(expected, System.Globalization.CultureInfo.InvariantCulture));
         (found is null).ShouldBe(expected is null);
         rates.LatestOnOrBefore("NOK", new DateOnly(2026, 3, 1)).ShouldBeNull();
+    }
+
+    private static LoanDebtInput Debt(int id, string name, string currency, bool secured, string paidOut, params (string Date, decimal Amount)[] balances) =>
+        new(id, name, currency, secured, DateOnly.Parse(paidOut, System.Globalization.CultureInfo.InvariantCulture),
+            [.. balances.Select(b => new StoredBalance(DateOnly.Parse(b.Date, System.Globalization.CultureInfo.InvariantCulture), b.Amount))]);
+
+    [TestMethod]
+    public void Loans_are_debts_at_their_latest_balance_and_secured_ones_stay_out_of_liquid()
+    {
+        Account[] accounts = [Acc(1, "Savings", AccountType.Savings, "NOK"), Acc(2, "House", AccountType.Property, "NOK")];
+        AccountValue[] values = [Val(1, "2026-02-28", 100_000m), Val(2, "2026-02-28", 4_000_000m)];
+        LoanDebtInput[] loans =
+        [
+            Debt(1, "Mortgage", "NOK", secured: true, "2026-01-01", ("2026-01-31", 3_000_000m), ("2026-02-28", 2_900_000m)),
+            Debt(2, "Car loan", "USD", secured: false, "2026-01-01", ("2026-02-15", 1_000m)),
+        ];
+
+        var result = NetWorthCalculator.On(new DateOnly(2026, 3, 1), _nok, accounts, values, _minorUnits, _converter, loans);
+
+        result.Debts.Select(d => (d.Name, d.Amount, d.Converted, d.BalanceDate)).ShouldBe(
+        [
+            ("Car loan", 1_000m, 8_000m, new DateOnly(2026, 2, 15)),
+            ("Mortgage", 2_900_000m, 2_900_000m, new DateOnly(2026, 2, 28)),
+        ]);
+        // Assets 4 100 000 minus debts 2 908 000; liquid is the savings minus only the car loan.
+        result.Total.ShouldBe(1_192_000m);
+        result.Liquid.ShouldBe(92_000m);
+        result.LoansWithoutBalance.ShouldBeEmpty();
+    }
+
+    [TestMethod]
+    public void A_loan_without_a_balance_yet_is_listed_not_counted_and_one_not_yet_paid_out_is_ignored()
+    {
+        Account[] accounts = [Acc(1, "Savings", AccountType.Savings, "NOK")];
+        LoanDebtInput[] loans =
+        [
+            Debt(1, "No balance", "NOK", secured: false, "2026-01-01"),
+            Debt(2, "Later", "NOK", secured: false, "2026-06-01", ("2026-07-01", 500m)),
+        ];
+
+        var result = NetWorthCalculator.On(new DateOnly(2026, 3, 1), _nok, accounts, [Val(1, "2026-02-28", 1_000m)], _minorUnits, _converter, loans);
+
+        result.LoansWithoutBalance.ShouldBe(["No balance"]);
+        result.Debts.ShouldBeEmpty();
+        result.Total.ShouldBe(1_000m);
+    }
+
+    [TestMethod]
+    public void A_loan_in_a_currency_without_a_rate_is_listed_and_left_out_never_counted_at_1()
+    {
+        LoanDebtInput[] loans = [Debt(1, "Romanian", "RON", secured: false, "2026-01-01", ("2026-02-28", 20_000m))];
+
+        var result = NetWorthCalculator.On(new DateOnly(2026, 3, 1), _nok, [Acc(1, "Savings", AccountType.Savings, "NOK")], [Val(1, "2026-02-28", 1_000m)], _minorUnits, _converter, loans);
+
+        result.MissingRates.ShouldBe(["RON"]);
+        result.Debts.Single().Converted.ShouldBeNull();
+        result.Total.ShouldBe(1_000m);
+    }
+
+    [TestMethod]
+    public void The_history_includes_the_debt_from_the_month_it_has_a_balance()
+    {
+        LoanDebtInput[] loans = [Debt(1, "Mortgage", "NOK", secured: false, "2026-01-01", ("2026-02-28", 300m))];
+
+        var points = NetWorthCalculator.Monthly(new DateOnly(2026, 3, 31), _nok, [Acc(1, "Savings", AccountType.Savings, "NOK")], [Val(1, "2026-01-31", 1_000m)], _minorUnits, _converter, loans);
+
+        points.Select(p => p.Total).ShouldBe([1_000m, 700m, 700m]);
     }
 }

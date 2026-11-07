@@ -11,5 +11,6 @@ export interface CreateLoan {
   paidOut?: (string | null);
   periods?: (Array<PeriodInput> | null);
   principal?: (number | string | null);
+  securedOnProperty?: (boolean | null);
   termMonths?: (number | string | null);
 }

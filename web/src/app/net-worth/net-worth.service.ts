@@ -22,6 +22,21 @@ export interface NetWorthLine {
   readonly liquid: boolean;
 }
 
+/** One loan's part of the net worth: a debt at its latest recorded balance (#135). */
+export interface NetWorthDebt {
+  readonly loanId: number;
+  readonly name: string;
+  readonly currencyCode: string;
+  /** The balance owed in the loan's own currency. */
+  readonly amount: number;
+  readonly balanceDate: string;
+  /** In the shown currency; null when an exchange rate is missing. */
+  readonly converted: number | null;
+  readonly rateDate: string | null;
+  /** Left out of liquid net worth, like the property it is secured on. */
+  readonly securedOnProperty: boolean;
+}
+
 export interface NetWorth {
   readonly date: string;
   readonly currency: string;
@@ -30,6 +45,9 @@ export interface NetWorth {
   /** Currencies without an exchange rate; their accounts are left out of the totals. */
   readonly missingRates: readonly string[];
   readonly lines: readonly NetWorthLine[];
+  readonly debts: readonly NetWorthDebt[];
+  /** Loans with no recorded balance yet: not counted, so the totals are too high. */
+  readonly loansWithoutBalance: readonly string[];
 }
 
 export interface NetWorthPoint {
@@ -87,6 +105,17 @@ export class NetWorthService {
         rateDate: l.rateDate,
         liquid: l.liquid,
       })),
+      debts: result.debts.map((d) => ({
+        loanId: Number(d.loanId),
+        name: d.name,
+        currencyCode: d.currencyCode,
+        amount: Number(d.amount),
+        balanceDate: d.balanceDate,
+        converted: d.converted === null ? null : Number(d.converted),
+        rateDate: d.rateDate,
+        securedOnProperty: d.securedOnProperty,
+      })),
+      loansWithoutBalance: result.loansWithoutBalance,
     };
   }
 

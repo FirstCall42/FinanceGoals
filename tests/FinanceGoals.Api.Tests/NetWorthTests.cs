@@ -94,6 +94,46 @@ public sealed class NetWorthTests
     }
 
     [TestMethod]
+    public async Task A_loan_counts_as_a_debt_at_its_recorded_balance_and_the_flag_decides_if_liquid_counts_it()
+    {
+        var profileId = await ProfileOfAsync("nw-owner-7");
+        var savings = await AccountAsync(profileId, "nw-owner-7", "Savings", "Savings", "NOK");
+        await BalanceAsync(profileId, "nw-owner-7", "2026-02-28", (savings.Id, 100_000m));
+        var created = await SendAsync(HttpMethod.Post, $"/api/profiles/{profileId}/loans", "nw-owner-7", new
+        {
+            name = "Home",
+            currencyCode = "NOK",
+            principal = 3_000_000m,
+            paidOut = "2026-01-01",
+            firstPaymentDate = "2026-02-01",
+            termMonths = 300,
+            periods = new object[]
+            {
+                new { start = "2026-01-01", rateType = "Variable", repaymentType = "Annuity", rates = new object[] { new { effectiveFrom = "2026-01-01", annualRatePercent = 5m } } },
+            },
+        });
+        created.StatusCode.ShouldBe(HttpStatusCode.Created);
+        var loanId = (int)(await created.Content.ReadFromJsonAsync<System.Text.Json.Nodes.JsonNode>())!["id"]!;
+        var loanPath = $"/api/profiles/{profileId}/loans/{loanId}";
+
+        var before = await NetWorthAsync(profileId, "nw-owner-7", "?date=2026-03-01");
+        (await SendAsync(HttpMethod.Put, $"{loanPath}/balances/2026-02-28", "nw-owner-7", new { amount = 2_900_000m })).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var unflagged = await NetWorthAsync(profileId, "nw-owner-7", "?date=2026-03-01");
+        (await SendAsync(HttpMethod.Put, $"{loanPath}/secured-on-property", "nw-owner-7", new { securedOnProperty = true })).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var flagged = await NetWorthAsync(profileId, "nw-owner-7", "?date=2026-03-01");
+
+        before.LoansWithoutBalance.ShouldBe(["Home"]);
+        before.Total.ShouldBe(100_000m);
+        unflagged.Debts.Single().Converted.ShouldBe(2_900_000m);
+        unflagged.Total.ShouldBe(-2_800_000m);
+        unflagged.Liquid.ShouldBe(-2_800_000m);
+        flagged.Debts.Single().SecuredOnProperty.ShouldBeTrue();
+        flagged.Total.ShouldBe(-2_800_000m);
+        flagged.Liquid.ShouldBe(100_000m);
+        (await SendAsync(HttpMethod.Put, $"/api/profiles/{profileId}/loans/999999/secured-on-property", "nw-owner-7", new { securedOnProperty = true })).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    [TestMethod]
     public async Task A_currency_without_a_rate_is_listed_and_left_out_never_counted_at_1()
     {
         var profileId = await ProfileOfAsync("nw-owner-2");

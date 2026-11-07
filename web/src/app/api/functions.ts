@@ -55,6 +55,8 @@ export type { CreateLoan$Params as CreateLoan$Params } from './fn/finance-goals-
 export { createLoan as createLoan } from './fn/finance-goals-api/create-loan';
 export type { GetLoan$Params as GetLoan$Params } from './fn/finance-goals-api/get-loan';
 export { getLoan as getLoan } from './fn/finance-goals-api/get-loan';
+export type { SetLoanSecuredOnProperty$Params as SetLoanSecuredOnProperty$Params } from './fn/finance-goals-api/set-loan-secured-on-property';
+export { setLoanSecuredOnProperty as setLoanSecuredOnProperty } from './fn/finance-goals-api/set-loan-secured-on-property';
 export type { AddLoanRateChange$Params as AddLoanRateChange$Params } from './fn/finance-goals-api/add-loan-rate-change';
 export { addLoanRateChange as addLoanRateChange } from './fn/finance-goals-api/add-loan-rate-change';
 export type { GetLoanExtras$Params as GetLoanExtras$Params } from './fn/finance-goals-api/get-loan-extras';

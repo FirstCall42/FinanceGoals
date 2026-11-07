@@ -28,6 +28,9 @@ public interface ILoanStore
 
     Task<(LoanOutcome Outcome, StoredLoan? Loan)> CreateAsync(int profileId, Loan loan, int byUserId, CancellationToken cancellationToken);
 
+    /// <summary>Marks whether the loan is secured on property (#135); false when the profile has no such loan.</summary>
+    Task<bool> SetSecuredOnPropertyAsync(int profileId, int loanId, bool secured, int byUserId, CancellationToken cancellationToken);
+
     /// <summary>Stores a new rate change in the period it falls in; the caller has checked it with <see cref="Loan.WithRateChange"/>.</summary>
     Task<LoanOutcome> AddRateChangeAsync(int profileId, int loanId, DateOnly periodStart, RateChange change, int byUserId, CancellationToken cancellationToken);
 }

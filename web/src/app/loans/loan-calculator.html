@@ -185,6 +185,11 @@
       } @empty {
         <p>No saved loans yet.</p>
       }
+      <app-loan-records
+        [profileId]="profile()!.id"
+        [loans]="savedLoans()"
+        (changed)="loanChanged($event)"
+      />
       <label class="field">
         <span>Name</span>
         <input type="text" [value]="loanName()" (input)="loanName.set(text($event))" />

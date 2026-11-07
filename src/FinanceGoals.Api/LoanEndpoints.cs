@@ -13,7 +13,10 @@ internal sealed record PeriodInput(DateOnly? Start = null, string? RateType = nu
 
 internal sealed record CreateLoan(
     string? Name = null, string? CurrencyCode = null, decimal? Principal = null, DateOnly? PaidOut = null, DateOnly? FirstPaymentDate = null,
-    int? TermMonths = null, decimal? FeePerPayment = null, string? DayCount = null, List<PeriodInput>? Periods = null);
+    int? TermMonths = null, decimal? FeePerPayment = null, string? DayCount = null, List<PeriodInput>? Periods = null,
+    bool? SecuredOnProperty = null);
+
+internal sealed record SetSecured(bool? SecuredOnProperty = null);
 
 internal sealed record AddRateChange(DateOnly? EffectiveFrom = null, decimal? AnnualRatePercent = null);
 
@@ -24,14 +27,14 @@ internal sealed record PeriodView(DateOnly Start, string RateType, string Repaym
 /// <summary>A stored loan as the API shows it: rates in percent, like the calculator.</summary>
 internal sealed record LoanView(
     int Id, string Name, string CurrencyCode, decimal Principal, DateOnly PaidOut, DateOnly FirstPaymentDate, int TermMonths,
-    decimal FeePerPayment, string DayCount, IReadOnlyList<PeriodView> Periods)
+    decimal FeePerPayment, string DayCount, bool SecuredOnProperty, IReadOnlyList<PeriodView> Periods)
 {
     public static LoanView From(StoredLoan stored)
     {
         var loan = stored.Loan;
         return new LoanView(
             stored.Id, loan.Name, loan.Principal.Currency.Code, loan.Principal.Amount, loan.Start, loan.FirstPaymentDate, loan.TermMonths,
-            loan.FeePerPayment.Amount, loan.DayCount.ToString(),
+            loan.FeePerPayment.Amount, loan.DayCount.ToString(), loan.SecuredOnProperty,
             loan.Periods.Select(p => new PeriodView(
                 p.Start, p.RateType.ToString(), p.RepaymentType.ToString(), p.Rates.Select(r => new RateView(r.EffectiveFrom, r.AnnualRate * 100m)).ToArray())).ToArray());
     }
@@ -70,6 +73,25 @@ internal static class LoanEndpoints
             })
             .WithName("CreateLoan")
             .WithSummary("Saves a loan with its periods and their rate changes. The rules are those of the schedule engine.");
+
+        profile.MapPut("/loans/{loanId:int}/secured-on-property", async Task<Results<Ok<LoanView>, NotFound, ValidationProblem>> (
+                int loanId, SetSecured request, HttpContext http, ILoanStore loans, CancellationToken cancellationToken) =>
+            {
+                if (request.SecuredOnProperty is not { } secured)
+                {
+                    return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["securedOnProperty"] = ["Say whether the loan is secured on property."] });
+                }
+
+                var access = http.Access();
+                if (!await loans.SetSecuredOnPropertyAsync(access.ProfileId, loanId, secured, access.UserId, cancellationToken))
+                {
+                    return TypedResults.NotFound();
+                }
+
+                return TypedResults.Ok(LoanView.From((await loans.GetAsync(access.ProfileId, loanId, cancellationToken))!));
+            })
+            .WithName("SetLoanSecuredOnProperty")
+            .WithSummary("Marks a loan as secured (or not) on property such as the home, so liquid net worth leaves it out.");
 
         profile.MapPost("/loans/{loanId:int}/rate-changes", async Task<Results<Ok<LoanView>, NotFound, ValidationProblem, Conflict<ProblemDetails>>> (
                 int loanId, AddRateChange request, HttpContext http, ILoanStore loans, CancellationToken cancellationToken) =>
@@ -193,7 +215,7 @@ internal static class LoanEndpoints
                 return new LoanPeriod(start, rateType, repayment, rates);
             }).ToArray();
             var fee = new Money(r.FeePerPayment ?? 0m, currency);
-            var loan = new Loan(name, new Money(r.Principal!.Value, currency), r.FirstPaymentDate!.Value, r.TermMonths!.Value, periods, fee, r.PaidOut, dayCount);
+            var loan = new Loan(name, new Money(r.Principal!.Value, currency), r.FirstPaymentDate!.Value, r.TermMonths!.Value, periods, fee, r.PaidOut, dayCount, r.SecuredOnProperty ?? false);
             return (loan, errors);
         }
         catch (Exception e) when (e is ArgumentException or InvalidOperationException)

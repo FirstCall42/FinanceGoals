@@ -14,6 +14,7 @@ const loan = (over: Partial<LoanView> = {}): LoanView => ({
   termMonths: 360,
   feePerPayment: 55,
   dayCount: 'ActualActual',
+  securedOnProperty: false,
   periods: [
     {
       start: '2026-01-01',
