@@ -74,7 +74,7 @@ public static class LoanSchedule
         {
             var contractLeft = loan.TermMonths - number + 1;
             var remaining = Math.Min(contractLeft, repaymentMonthsLeft);
-            var date = loan.FirstPaymentDate.AddMonths(number - 1);
+            var date = loan.PaymentDate(number);
             var accrualStart = number == 1 ? loan.Start : previous.AddDays(1);
             var period = loan.PeriodOn(accrualStart);
             var rate = period.RateOn(accrualStart);
@@ -305,8 +305,8 @@ public static class LoanSchedule
     /// <summary>The interest rate of payment <paramref name="number"/>'s regular month (a month before the first payment for payment 1).</summary>
     private static decimal MonthRate(Loan loan, int number, decimal annualRate)
     {
-        var to = loan.FirstPaymentDate.AddMonths(number - 1);
-        var from = number == 1 ? to.AddMonths(-1) : loan.FirstPaymentDate.AddMonths(number - 2);
+        var to = loan.PaymentDate(number);
+        var from = number == 1 ? to.AddMonths(-1) : loan.PaymentDate(number - 1);
         return Interest(1m, annualRate, loan.DayCount, from, to, wholeMonth: true);
     }
 

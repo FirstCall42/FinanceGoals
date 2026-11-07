@@ -190,8 +190,8 @@ import { Forecast, NetWorth, NetWorthPoint, NetWorthService } from './net-worth.
               <p class="note">
                 The forecast grows each account from its latest balance with the return and monthly
                 contribution set under Accounts, at today's exchange rates. The low and high lines
-                are {{ f.spreadPoints }} percentage points either side. What the loans owe today is
-                subtracted and held flat.
+                are {{ f.spreadPoints }} percentage points either side. Loans follow their schedules
+                from the latest recorded balance and are subtracted.
               </p>
             }
             @if (forecast() && !shownForecast()) {

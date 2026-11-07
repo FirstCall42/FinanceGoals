@@ -183,4 +183,74 @@ public sealed class LoanTests
 
         loan.FeePerPayment.ShouldBe(Money.Zero(_nok));
     }
+
+    [TestMethod]
+    public void Starting_from_a_balance_continues_with_the_rate_in_force_the_later_changes_and_the_payments_left()
+    {
+        var loan = new Loan("Mortgage", _threeMillion, _firstPayment, 300,
+            [Variable(_start, new RateChange(_start, 0.05m), new RateChange(new DateOnly(2026, 4, 1), 0.06m), new RateChange(new DateOnly(2026, 9, 1), 0.07m))],
+            new Money(55m, _nok), dayCount: DayCount.Thirty360, securedOnProperty: true);
+
+        var continued = loan.StartingFrom(new DateOnly(2026, 6, 15), 2_900_000m)!;
+
+        // Payments on 1 Feb to 1 Jun are made (5); the next is 1 Jul and 295 are left.
+        continued.Principal.ShouldBe(new Money(2_900_000m, _nok));
+        continued.Start.ShouldBe(new DateOnly(2026, 6, 15));
+        continued.FirstPaymentDate.ShouldBe(new DateOnly(2026, 7, 1));
+        continued.TermMonths.ShouldBe(295);
+        continued.LastPaymentDate.ShouldBe(loan.LastPaymentDate);
+        continued.RateOn(new DateOnly(2026, 6, 15)).ShouldBe(0.06m);
+        continued.RateOn(new DateOnly(2026, 9, 1)).ShouldBe(0.07m);
+        continued.FeePerPayment.ShouldBe(new Money(55m, _nok));
+        continued.DayCount.ShouldBe(DayCount.Thirty360);
+        continued.SecuredOnProperty.ShouldBeTrue();
+    }
+
+    [TestMethod]
+    public void Starting_from_a_balance_keeps_later_periods()
+    {
+        var later = new DateOnly(2031, 1, 1);
+        var loan = new Loan("Mortgage", _threeMillion, _firstPayment, 300,
+        [
+            new LoanPeriod(_start, RateType.Fixed, RepaymentType.Annuity, [new RateChange(_start, 0.0449m)]),
+            new LoanPeriod(later, RateType.Variable, RepaymentType.StraightLine, [new RateChange(later, 0.052m)]),
+        ]);
+
+        var continued = loan.StartingFrom(new DateOnly(2027, 3, 10), 2_500_000m)!;
+
+        continued.Periods.Count.ShouldBe(2);
+        continued.Periods[0].RateType.ShouldBe(RateType.Fixed);
+        continued.RateOn(new DateOnly(2027, 3, 10)).ShouldBe(0.0449m);
+        continued.Periods[1].RepaymentType.ShouldBe(RepaymentType.StraightLine);
+    }
+
+    [TestMethod]
+    public void Starting_from_a_balance_is_refused_when_nothing_is_left()
+    {
+        var loan = new Loan("Mortgage", _threeMillion, _firstPayment, 12, [Variable(_start, new RateChange(_start, 0.05m))]);
+
+        loan.StartingFrom(new DateOnly(2027, 1, 1), 100m).ShouldBeNull();
+        loan.StartingFrom(new DateOnly(2026, 6, 1), 0m).ShouldBeNull();
+        loan.StartingFrom(new DateOnly(2025, 12, 31), 100m).ShouldBeNull();
+    }
+
+    [TestMethod]
+    public void A_loan_paid_on_the_31st_keeps_that_day_when_continued_from_a_balance_in_a_short_month()
+    {
+        var paidOut = new DateOnly(2025, 12, 31);
+        var loan = new Loan("Month end", _threeMillion, new DateOnly(2026, 1, 31), 12, [Variable(paidOut, new RateChange(paidOut, 0.05m))], paidOut: paidOut);
+
+        loan.PaymentDate(2).ShouldBe(new DateOnly(2026, 2, 28));
+        loan.PaymentDate(3).ShouldBe(new DateOnly(2026, 3, 31));
+        loan.LastPaymentDate.ShouldBe(new DateOnly(2026, 12, 31));
+
+        // Recorded on 5 April: payments of 31 Jan, 28 Feb and 31 Mar are made; the next is 30 April, then 31 May again.
+        var continued = loan.StartingFrom(new DateOnly(2026, 4, 5), 2_000_000m)!;
+
+        continued.FirstPaymentDate.ShouldBe(new DateOnly(2026, 4, 30));
+        continued.TermMonths.ShouldBe(9);
+        continued.PaymentDate(2).ShouldBe(new DateOnly(2026, 5, 31));
+        continued.LastPaymentDate.ShouldBe(loan.LastPaymentDate);
+        LoanSchedule.Calculate(continued).Select(i => i.Date).Take(3).ShouldBe([new DateOnly(2026, 4, 30), new DateOnly(2026, 5, 31), new DateOnly(2026, 6, 30)]);
+    }
 }
