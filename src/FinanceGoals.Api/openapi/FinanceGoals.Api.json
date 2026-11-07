@@ -906,7 +906,7 @@
         "tags": [
           "FinanceGoals.Api"
         ],
-        "summary": "Balances month by month from each account's latest balance, with a low, expected and high return, in a currency at today's rates. Today's loan balances are subtracted and held flat until loans follow their schedules.",
+        "summary": "Balances month by month from each account's latest balance, with a low, expected and high return, in a currency at today's rates. Loans follow their schedules from their latest recorded balance and are subtracted.",
         "operationId": "GetBalanceForecast",
         "parameters": [
           {

@@ -37,19 +37,26 @@ internal static class ForecastEndpoints
                 var saved = await assumptions.ListAsync(http.Access().ProfileId, cancellationToken);
                 var projected = BalanceForecast.Project(today, count, context.Target, context.Accounts, context.Values, saved, context.MinorUnits, context.Converter);
 
-                // Until loans follow their schedules in the forecast (#142), today's debts are held flat, so the
-                // forecast continues the net history instead of jumping up by what the loans owe.
-                var debts = NetWorthCalculator.On(today, context.Target, context.Accounts, context.Values, context.MinorUnits, context.Converter, context.Loans).Debts;
-                var owed = debts.Sum(d => d.Converted ?? 0m);
-                var missing = projected.MissingRates.Concat(debts.Where(d => d.Converted is null).Select(d => d.CurrencyCode)).Distinct().Order(StringComparer.Ordinal).ToArray();
+                var profileId = http.Access().ProfileId;
+                var withExtras = new List<LoanWithExtras>();
+                foreach (var stored in await loanStore.ListAsync(profileId, cancellationToken))
+                {
+                    if (await loanExtras.GetAsync(profileId, stored.Id, cancellationToken) is { } loanExtra)
+                    {
+                        withExtras.Add(new LoanWithExtras(stored.Loan, loanExtra));
+                    }
+                }
+
+                // Loans follow their schedules from their latest recorded balance, so the forecast continues the net history.
+                var owed = LoanForecast.Owed(today, count, context.Target, withExtras, context.MinorUnits, context.Converter);
                 return TypedResults.Ok(projected with
                 {
-                    MissingRates = missing,
-                    Points = [.. projected.Points.Select(p => p with { Low = p.Low - owed, Expected = p.Expected - owed, High = p.High - owed })],
+                    MissingRates = [.. projected.MissingRates.Concat(owed.MissingRates).Distinct().Order(StringComparer.Ordinal)],
+                    Points = [.. projected.Points.Select((p, month) => p with { Low = p.Low - owed.ByMonth[month], Expected = p.Expected - owed.ByMonth[month], High = p.High - owed.ByMonth[month] })],
                 });
             })
             .WithName("GetBalanceForecast")
-            .WithSummary("Balances month by month from each account's latest balance, with a low, expected and high return, in a currency at today's rates. Today's loan balances are subtracted and held flat until loans follow their schedules.");
+            .WithSummary("Balances month by month from each account's latest balance, with a low, expected and high return, in a currency at today's rates. Loans follow their schedules from their latest recorded balance and are subtracted.");
 
         profile.MapGet("/account-assumptions", async (HttpContext http, IAccountAssumptionStore assumptions, CancellationToken cancellationToken) =>
                 TypedResults.Ok((await assumptions.ListAsync(http.Access().ProfileId, cancellationToken)).Select(View).ToList()))

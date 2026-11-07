@@ -236,6 +236,45 @@ public sealed class Loan
         return _periods.Last(period => period.Start <= day);
     }
 
+    /// <summary>
+    /// The loan as it continues from a balance the bank reported on a day: that balance is the new principal,
+    /// the rate in force that day starts it, and later rate changes and periods stay. Null when nothing is
+    /// left to pay, or when the next payment falls on a day some months lack (later payments count months
+    /// from the first, so a short month would shorten them all).
+    /// </summary>
+    public Loan? StartingFrom(DateOnly day, decimal balance)
+    {
+        if (balance <= 0 || day < Start)
+        {
+            return null;
+        }
+
+        var made = 0;
+        while (made < TermMonths && FirstPaymentDate.AddMonths(made) <= day)
+        {
+            made++;
+        }
+
+        if (made >= TermMonths)
+        {
+            return null;
+        }
+
+        var next = FirstPaymentDate.AddMonths(made);
+        if (next.Day != FirstPaymentDate.Day)
+        {
+            return null;
+        }
+
+        var current = PeriodOn(day);
+        var rates = new List<RateChange> { new(day, current.RateOn(day)) };
+        rates.AddRange(current.Rates.Where(rate => rate.EffectiveFrom > day));
+        var periods = new[] { new LoanPeriod(day, current.RateType, current.RepaymentType, rates) }
+            .Concat(_periods.Where(period => period.Start > day))
+            .ToArray();
+        return new Loan(Name, new Money(balance, Principal.Currency), next, TermMonths - made, periods, FeePerPayment, day, DayCount, SecuredOnProperty);
+    }
+
     /// <summary>The nominal annual rate in effect on a day of the loan.</summary>
     public decimal RateOn(DateOnly day) => PeriodOn(day).RateOn(day);
 
