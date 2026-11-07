@@ -128,7 +128,8 @@ public sealed class Loan
         IReadOnlyList<LoanPeriod> periods,
         Money? feePerPayment = null,
         DateOnly? paidOut = null,
-        DayCount dayCount = DayCount.ActualActual)
+        DayCount dayCount = DayCount.ActualActual,
+        bool securedOnProperty = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentNullException.ThrowIfNull(periods);
@@ -192,6 +193,7 @@ public sealed class Loan
         FeePerPayment = fee;
         Start = start;
         DayCount = dayCount;
+        SecuredOnProperty = securedOnProperty;
         _periods = ordered;
     }
 
@@ -213,6 +215,12 @@ public sealed class Loan
     public DateOnly Start { get; }
 
     public DayCount DayCount { get; }
+
+    /// <summary>
+    /// Secured on the home or another illiquid asset (#135): liquid net worth leaves such a loan out, since
+    /// the property it is secured on is left out too.
+    /// </summary>
+    public bool SecuredOnProperty { get; }
 
     /// <summary>The day of the last payment.</summary>
     public DateOnly LastPaymentDate => FirstPaymentDate.AddMonths(TermMonths - 1);
@@ -252,6 +260,6 @@ public sealed class Loan
         var rates = period.Rates.Where(rate => rate.EffectiveFrom != change.EffectiveFrom).Append(change).ToArray();
         var updated = new LoanPeriod(period.Start, period.RateType, period.RepaymentType, rates);
         var periods = _periods.Select(p => ReferenceEquals(p, period) ? updated : p).ToArray();
-        return new Loan(Name, Principal, FirstPaymentDate, TermMonths, periods, FeePerPayment, Start, DayCount);
+        return new Loan(Name, Principal, FirstPaymentDate, TermMonths, periods, FeePerPayment, Start, DayCount, SecuredOnProperty);
     }
 }

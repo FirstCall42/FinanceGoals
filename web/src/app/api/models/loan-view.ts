@@ -16,5 +16,6 @@ export interface LoanView {
   paidOut: string;
   periods: Array<PeriodView>;
   principal: (number | string);
+  securedOnProperty: boolean;
   termMonths: (number | string);
 }

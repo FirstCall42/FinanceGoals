@@ -53,7 +53,7 @@ import { Forecast, NetWorth, NetWorthPoint, NetWorthService } from './net-worth.
               <span class="label">Net worth</span>
               <strong class="fg-amount">{{ nw.total | money: nw.currency : units() }}</strong>
               <small
-                >All accounts{{
+                >Accounts minus loans{{
                   nw.missingRates.length > 0 ? ', without the ones missing a rate' : ''
                 }}</small
               >
@@ -61,9 +61,17 @@ import { Forecast, NetWorth, NetWorthPoint, NetWorthService } from './net-worth.
             <div class="tile">
               <span class="label">Liquid net worth</span>
               <strong class="fg-amount">{{ nw.liquid | money: nw.currency : units() }}</strong>
-              <small>Leaves out property and pensions</small>
+              <small>Leaves out property, pensions and loans secured on property</small>
             </div>
           </div>
+
+          @if (nw.loansWithoutBalance.length > 0) {
+            <p class="note" role="alert">
+              {{ nw.loansWithoutBalance.join(', ') }} not counted: no balance is recorded for
+              {{ nw.loansWithoutBalance.length === 1 ? 'it' : 'them' }} yet, so the totals are too
+              high by what {{ nw.loansWithoutBalance.length === 1 ? 'it owes' : 'they owe' }}.
+            </p>
+          }
 
           @if (nw.lines.length === 0) {
             <p class="empty">
@@ -112,6 +120,45 @@ import { Forecast, NetWorth, NetWorthPoint, NetWorthService } from './net-worth.
             }
           }
 
+          @if (nw.debts.length > 0) {
+            <h2>Loans</h2>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">Loan</th>
+                    <th scope="col">Owed</th>
+                    <th scope="col">In {{ nw.currency }}</th>
+                    <th scope="col">Balance date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (debt of nw.debts; track debt.loanId) {
+                    <tr>
+                      <td>
+                        {{ debt.name }}
+                        <small class="type">{{
+                          debt.securedOnProperty ? 'secured on property · not in liquid' : ''
+                        }}</small>
+                      </td>
+                      <td class="fg-amount">
+                        {{ debt.amount | money: debt.currencyCode : minorUnits(debt.currencyCode) }}
+                      </td>
+                      <td class="fg-amount">
+                        @if (debt.converted !== null) {
+                          {{ debt.converted | money: nw.currency : units() }}
+                        } @else {
+                          <span class="norate">no rate</span>
+                        }
+                      </td>
+                      <td>{{ formatDate(debt.balanceDate) }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+
           @if (history().length > 0) {
             <h2>Month by month</h2>
             <label class="horizon">
@@ -143,7 +190,8 @@ import { Forecast, NetWorth, NetWorthPoint, NetWorthService } from './net-worth.
               <p class="note">
                 The forecast grows each account from its latest balance with the return and monthly
                 contribution set under Accounts, at today's exchange rates. The low and high lines
-                are {{ f.spreadPoints }} percentage points either side. Loans are not in it yet.
+                are {{ f.spreadPoints }} percentage points either side. What the loans owe today is
+                subtracted and held flat.
               </p>
             }
             @if (forecast() && !shownForecast()) {
@@ -340,7 +388,10 @@ export class NetWorthPage {
 
   /** The oldest exchange rate behind any converted line, to say which day's rates the figures use. */
   protected readonly rateDate = computed(() => {
-    const dates = (this.current()?.lines ?? []).map((l) => l.rateDate).filter((d) => d !== null);
+    const now = this.current();
+    const dates = [...(now?.lines ?? []), ...(now?.debts ?? [])]
+      .map((l) => l.rateDate)
+      .filter((d) => d !== null);
     return dates.length > 0 ? dates.reduce((a, b) => (a < b ? a : b)) : undefined;
   });
 

@@ -37,6 +37,8 @@ const netWorth = (over: object = {}) => ({
       liquid: false,
     }),
   ],
+  debts: [],
+  loansWithoutBalance: [],
   ...over,
 });
 
@@ -127,7 +129,7 @@ describe('Net worth page', () => {
       const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
       expect(text).toContain(`4${nbsp}074${nbsp}000,00${nbsp}NOK`);
       expect(text).toContain(`58${nbsp}000,00${nbsp}NOK`);
-      expect(text).toContain('Leaves out property and pensions');
+      expect(text).toContain('Leaves out property, pensions and loans secured on property');
       expect(text).toContain('House');
       expect(text).toContain('not liquid');
       expect(text).toContain('Month by month');
@@ -137,6 +139,43 @@ describe('Net worth page', () => {
       const chart = (fixture.nativeElement as HTMLElement).querySelector('svg[role=img]');
       expect(chart?.getAttribute('aria-label')).toContain('Net worth over time in NOK');
       expect(chart?.querySelectorAll('circle.hollow').length).toBe(1);
+    });
+  });
+
+  it('lists the loans as debts, marks the ones secured on property and warns about a loan with no balance', async () => {
+    signIn();
+    const fixture = TestBed.createComponent(NetWorthPage);
+    http.expectOne('/api/currencies').flush([]);
+    await fixture.whenStable();
+    answer(
+      'NOK',
+      netWorth({
+        total: 1_174_000,
+        liquid: 50_000,
+        debts: [
+          {
+            loanId: 7,
+            name: 'Mortgage',
+            currencyCode: 'NOK',
+            amount: 2_900_000,
+            balanceDate: '2026-10-31',
+            converted: 2_900_000,
+            rateDate: null,
+            securedOnProperty: true,
+          },
+        ],
+        loansWithoutBalance: ['Car loan'],
+      }),
+    );
+
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+      expect(text).toContain('Mortgage');
+      expect(text).toContain(`2${nbsp}900${nbsp}000,00${nbsp}NOK`);
+      expect(text).toContain('secured on property · not in liquid');
+      expect(text).toContain('31.10.2026');
+      expect(text).toContain('Car loan not counted: no balance is recorded for it yet');
     });
   });
 

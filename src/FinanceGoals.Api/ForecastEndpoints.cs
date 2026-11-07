@@ -1,5 +1,6 @@
 using FinanceGoals.Application.Accounts;
 using FinanceGoals.Application.Currencies;
+using FinanceGoals.Application.Loans;
 using FinanceGoals.Application.NetWorth;
 using FinanceGoals.Application.Profiles;
 using Microsoft.AspNetCore.Http.HttpResults;
@@ -18,7 +19,7 @@ internal static class ForecastEndpoints
     {
         profile.MapGet("/net-worth/forecast", async Task<Results<Ok<ForecastResult>, ValidationProblem>> (
                 string? currency, int? months, HttpContext http, IProfileStore profiles, IAccountStore accounts, IAccountValueStore values,
-                IAccountAssumptionStore assumptions, ICurrencyCatalog currencies, IRateHistory rates, TimeProvider clock, CancellationToken cancellationToken) =>
+                IAccountAssumptionStore assumptions, ILoanStore loanStore, ILoanExtraStore loanExtras, ICurrencyCatalog currencies, IRateHistory rates, TimeProvider clock, CancellationToken cancellationToken) =>
             {
                 var count = months ?? 120;
                 if (count is < 1 or > BalanceForecast.MaxMonths)
@@ -27,17 +28,28 @@ internal static class ForecastEndpoints
                 }
 
                 var today = DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime);
-                var context = await NetWorthEndpoints.LoadAsync(currency, today, http, profiles, accounts, values, currencies, rates, cancellationToken);
+                var context = await NetWorthEndpoints.LoadAsync(currency, today, http, profiles, accounts, values, loanStore, loanExtras, currencies, rates, cancellationToken);
                 if (context.Error is { } error)
                 {
                     return TypedResults.ValidationProblem(error);
                 }
 
                 var saved = await assumptions.ListAsync(http.Access().ProfileId, cancellationToken);
-                return TypedResults.Ok(BalanceForecast.Project(today, count, context.Target, context.Accounts, context.Values, saved, context.MinorUnits, context.Converter));
+                var projected = BalanceForecast.Project(today, count, context.Target, context.Accounts, context.Values, saved, context.MinorUnits, context.Converter);
+
+                // Until loans follow their schedules in the forecast (#142), today's debts are held flat, so the
+                // forecast continues the net history instead of jumping up by what the loans owe.
+                var debts = NetWorthCalculator.On(today, context.Target, context.Accounts, context.Values, context.MinorUnits, context.Converter, context.Loans).Debts;
+                var owed = debts.Sum(d => d.Converted ?? 0m);
+                var missing = projected.MissingRates.Concat(debts.Where(d => d.Converted is null).Select(d => d.CurrencyCode)).Distinct().Order(StringComparer.Ordinal).ToArray();
+                return TypedResults.Ok(projected with
+                {
+                    MissingRates = missing,
+                    Points = [.. projected.Points.Select(p => p with { Low = p.Low - owed, Expected = p.Expected - owed, High = p.High - owed })],
+                });
             })
             .WithName("GetBalanceForecast")
-            .WithSummary("Balances month by month from each account's latest balance, with a low, expected and high return, in a currency at today's rates. Loans are not included yet.");
+            .WithSummary("Balances month by month from each account's latest balance, with a low, expected and high return, in a currency at today's rates. Today's loan balances are subtracted and held flat until loans follow their schedules.");
 
         profile.MapGet("/account-assumptions", async (HttpContext http, IAccountAssumptionStore assumptions, CancellationToken cancellationToken) =>
                 TypedResults.Ok((await assumptions.ListAsync(http.Access().ProfileId, cancellationToken)).Select(View).ToList()))

@@ -90,6 +90,34 @@ public sealed class ForecastTests
     }
 
     [TestMethod]
+    public async Task The_forecast_subtracts_what_the_loans_owe_today_so_it_continues_the_net_history()
+    {
+        var (profileId, _) = await AccountWithBalanceAsync("fc-owner-4", 100_000m);
+        var path = $"/api/profiles/{profileId}";
+        var created = await SendAsync(HttpMethod.Post, $"{path}/loans", "fc-owner-4", new
+        {
+            name = "Car",
+            currencyCode = "NOK",
+            principal = 40_000m,
+            paidOut = "2026-01-01",
+            firstPaymentDate = "2026-02-01",
+            termMonths = 24,
+            periods = new object[]
+            {
+                new { start = "2026-01-01", rateType = "Variable", repaymentType = "Annuity", rates = new object[] { new { effectiveFrom = "2026-01-01", annualRatePercent = 5m } } },
+            },
+        });
+        created.StatusCode.ShouldBe(HttpStatusCode.Created);
+        var loanId = (int)(await ReadAsync(created))["id"]!;
+        (await SendAsync(HttpMethod.Put, $"{path}/loans/{loanId}/balances/2026-01-31", "fc-owner-4", new { amount = 30_000m })).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var forecast = await ReadAsync(await SendAsync(HttpMethod.Get, $"{path}/net-worth/forecast?months=6", "fc-owner-4"));
+
+        ((decimal)forecast["points"]![0]!["expected"]!).ShouldBe(70_000m);
+        ((decimal)forecast["points"]![6]!["expected"]!).ShouldBe(70_000m);
+    }
+
+    [TestMethod]
     public async Task Bad_assumptions_and_bad_forecast_requests_are_a_400()
     {
         var (profileId, accountId) = await AccountWithBalanceAsync("fc-owner-2", 1_000m);

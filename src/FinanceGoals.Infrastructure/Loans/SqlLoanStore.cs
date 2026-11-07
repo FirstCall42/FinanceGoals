@@ -42,9 +42,9 @@ internal sealed class SqlLoanStore : ILoanStore
             int id;
             await using (var insert = new SqlCommand(
                 """
-                INSERT INTO app.Loan (ProfileId, Name, CurrencyCode, Principal, PaidOut, FirstPaymentDate, TermMonths, FeePerPayment, DayCount, CreatedBy, UpdatedBy)
+                INSERT INTO app.Loan (ProfileId, Name, CurrencyCode, Principal, PaidOut, FirstPaymentDate, TermMonths, FeePerPayment, DayCount, SecuredOnProperty, CreatedBy, UpdatedBy)
                 OUTPUT inserted.Id
-                VALUES (@ProfileId, @Name, @Currency, @Principal, @PaidOut, @FirstPaymentDate, @TermMonths, @Fee, @DayCount, @UserId, @UserId);
+                VALUES (@ProfileId, @Name, @Currency, @Principal, @PaidOut, @FirstPaymentDate, @TermMonths, @Fee, @DayCount, @Secured, @UserId, @UserId);
                 """,
                 connection, transaction))
             {
@@ -57,6 +57,7 @@ internal sealed class SqlLoanStore : ILoanStore
                 insert.Parameters.Add(new SqlParameter("@TermMonths", SqlDbType.Int) { Value = loan.TermMonths });
                 insert.Parameters.Add(Amount("@Fee", loan.FeePerPayment.Amount));
                 insert.Parameters.Add(new SqlParameter("@DayCount", SqlDbType.VarChar, 12) { Value = loan.DayCount.ToString() });
+                insert.Parameters.Add(new SqlParameter("@Secured", SqlDbType.Bit) { Value = loan.SecuredOnProperty });
                 insert.Parameters.Add(new SqlParameter("@UserId", SqlDbType.Int) { Value = byUserId });
                 id = (int)(await insert.ExecuteScalarAsync(cancellationToken))!;
             }
@@ -90,6 +91,19 @@ internal sealed class SqlLoanStore : ILoanStore
         {
             return (LoanOutcome.NameTaken, null);
         }
+    }
+
+    public async Task<bool> SetSecuredOnPropertyAsync(int profileId, int loanId, bool secured, int byUserId, CancellationToken cancellationToken)
+    {
+        await using var connection = await OpenAsync(cancellationToken);
+        await using var update = new SqlCommand(
+            "UPDATE app.Loan SET SecuredOnProperty = @Secured, UpdatedAt = SYSUTCDATETIME(), UpdatedBy = @UserId WHERE Id = @LoanId AND ProfileId = @ProfileId;",
+            connection);
+        update.Parameters.Add(new SqlParameter("@Secured", SqlDbType.Bit) { Value = secured });
+        update.Parameters.Add(new SqlParameter("@UserId", SqlDbType.Int) { Value = byUserId });
+        update.Parameters.Add(new SqlParameter("@LoanId", SqlDbType.Int) { Value = loanId });
+        update.Parameters.Add(new SqlParameter("@ProfileId", SqlDbType.Int) { Value = profileId });
+        return await update.ExecuteNonQueryAsync(cancellationToken) == 1;
     }
 
     public async Task<LoanOutcome> AddRateChangeAsync(
@@ -150,7 +164,7 @@ internal sealed class SqlLoanStore : ILoanStore
     {
         await using var command = new SqlCommand(
             """
-            SELECT l.Id, l.Name, l.CurrencyCode, c.MinorUnits, l.Principal, l.PaidOut, l.FirstPaymentDate, l.TermMonths, l.FeePerPayment, l.DayCount
+            SELECT l.Id, l.Name, l.CurrencyCode, c.MinorUnits, l.Principal, l.PaidOut, l.FirstPaymentDate, l.TermMonths, l.FeePerPayment, l.DayCount, l.SecuredOnProperty
                 FROM app.Loan l JOIN app.Currency c ON c.Code = l.CurrencyCode
                 WHERE l.ProfileId = @ProfileId AND (@LoanId IS NULL OR l.Id = @LoanId) ORDER BY l.Name, l.Id;
             SELECT p.LoanId, p.StartDate, p.RateType, p.RepaymentType FROM app.LoanPeriod p
@@ -163,12 +177,12 @@ internal sealed class SqlLoanStore : ILoanStore
         command.Parameters.Add(new SqlParameter("@LoanId", SqlDbType.Int) { Value = (object?)loanId ?? DBNull.Value });
 
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-        var heads = new List<(int Id, string Name, Currency Currency, decimal Principal, DateOnly PaidOut, DateOnly First, int Term, decimal Fee, DayCount DayCount)>();
+        var heads = new List<(int Id, string Name, Currency Currency, decimal Principal, DateOnly PaidOut, DateOnly First, int Term, decimal Fee, DayCount DayCount, bool Secured)>();
         while (await reader.ReadAsync(cancellationToken))
         {
             var currency = new Currency(reader.GetString(2).Trim(), Convert.ToInt32(reader.GetValue(3), CultureInfo.InvariantCulture));
             heads.Add((reader.GetInt32(0), reader.GetString(1), currency, reader.GetDecimal(4), DateOnly.FromDateTime(reader.GetDateTime(5)),
-                DateOnly.FromDateTime(reader.GetDateTime(6)), reader.GetInt32(7), reader.GetDecimal(8), Enum.Parse<DayCount>(reader.GetString(9))));
+                DateOnly.FromDateTime(reader.GetDateTime(6)), reader.GetInt32(7), reader.GetDecimal(8), Enum.Parse<DayCount>(reader.GetString(9)), reader.GetBoolean(10)));
         }
 
         await reader.NextResultAsync(cancellationToken);
@@ -197,7 +211,8 @@ internal sealed class SqlLoanStore : ILoanStore
                     .ToArray(),
                 new Money(h.Fee, h.Currency),
                 h.PaidOut,
-                h.DayCount))).ToList();
+                h.DayCount,
+                h.Secured))).ToList();
     }
 
     private async Task<SqlConnection> OpenAsync(CancellationToken cancellationToken)

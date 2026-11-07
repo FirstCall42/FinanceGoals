@@ -11,6 +11,7 @@ import {
 import { SavedLoan, SavedLoanService } from './saved-loan.service';
 import { DateField, formatDate } from '../date/date-field';
 import { ExtraVsInvest } from './extra-vs-invest-panel';
+import { LoanRecords } from './loan-records';
 import { PayoffChart } from './payoff-chart';
 import { LoanInput, defaultInput, formatMonths, isoDate, toRequest } from './loan-input';
 
@@ -32,7 +33,7 @@ interface ScheduleYear {
  */
 @Component({
   selector: 'app-loan-calculator',
-  imports: [DateField, MoneyPipe, PayoffChart, ExtraVsInvest],
+  imports: [DateField, MoneyPipe, PayoffChart, ExtraVsInvest, LoanRecords],
   templateUrl: './loan-calculator.html',
   styleUrl: './loan-calculator.scss',
 })
@@ -216,6 +217,10 @@ export class LoanCalculator {
     } catch (error) {
       this.notice.set(messageOf(error));
     }
+  }
+
+  protected loanChanged(updated: SavedLoan): void {
+    this.savedLoans.update((all) => all.map((l) => (l.id === updated.id ? updated : l)));
   }
 
   protected reset(): void {

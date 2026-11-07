@@ -5,6 +5,8 @@ import { addLoanOneOffExtra } from '../api/fn/finance-goals-api/add-loan-one-off
 import { createLoan } from '../api/fn/finance-goals-api/create-loan';
 import { getLoan } from '../api/fn/finance-goals-api/get-loan';
 import { getLoanExtras } from '../api/fn/finance-goals-api/get-loan-extras';
+import { saveLoanBalance } from '../api/fn/finance-goals-api/save-loan-balance';
+import { setLoanSecuredOnProperty } from '../api/fn/finance-goals-api/set-loan-secured-on-property';
 import { listLoans } from '../api/fn/finance-goals-api/list-loans';
 import { messageOf } from '../profile/profile.service';
 import { LoanInput } from './loan-input';
@@ -14,6 +16,9 @@ import { inputFromBalance, inputFromStored, toCreateLoan } from './saved-loan';
 export interface SavedLoan {
   readonly id: number;
   readonly name: string;
+  readonly currencyCode: string;
+  /** Secured on the home or other property: kept out of liquid net worth (#135). */
+  readonly securedOnProperty: boolean;
 }
 
 /** The household's stored loans (#139), through the generated API client. */
@@ -23,7 +28,36 @@ export class SavedLoanService {
 
   async list(profileId: number): Promise<SavedLoan[]> {
     const loans = await this.api.invoke(listLoans, { profileId });
-    return loans.map((l) => ({ id: Number(l.id), name: l.name }));
+    return loans.map((l) => ({
+      id: Number(l.id),
+      name: l.name,
+      currencyCode: l.currencyCode,
+      securedOnProperty: l.securedOnProperty,
+    }));
+  }
+
+  async setSecured(profileId: number, loanId: number, secured: boolean): Promise<SavedLoan> {
+    const l = await this.api.invoke(setLoanSecuredOnProperty, {
+      profileId,
+      loanId,
+      body: { securedOnProperty: secured },
+    });
+    return {
+      id: Number(l.id),
+      name: l.name,
+      currencyCode: l.currencyCode,
+      securedOnProperty: l.securedOnProperty,
+    };
+  }
+
+  /** The balance the bank reports on a day: net worth counts the loan as a debt from then on. */
+  async recordBalance(
+    profileId: number,
+    loanId: number,
+    date: string,
+    amount: number,
+  ): Promise<void> {
+    await this.api.invoke(saveLoanBalance, { profileId, loanId, date, body: { amount } });
   }
 
   /**
@@ -84,7 +118,15 @@ export class SavedLoanService {
         }),
       );
     }
-    return { loan: { id: loanId, name: loan.name }, failed };
+    return {
+      loan: {
+        id: loanId,
+        name: loan.name,
+        currencyCode: loan.currencyCode,
+        securedOnProperty: loan.securedOnProperty,
+      },
+      failed,
+    };
   }
 
   private async tryAdd(add: () => Promise<unknown>): Promise<string | undefined> {
