@@ -9,7 +9,7 @@ import { listLoans } from '../api/fn/finance-goals-api/list-loans';
 import { messageOf } from '../profile/profile.service';
 import { LoanInput } from './loan-input';
 import { LoanCalculationRequest } from './loan-calculator.service';
-import { inputFromStored, toCreateLoan } from './saved-loan';
+import { inputFromBalance, inputFromStored, toCreateLoan } from './saved-loan';
 
 export interface SavedLoan {
   readonly id: number;
@@ -26,13 +26,29 @@ export class SavedLoanService {
     return loans.map((l) => ({ id: Number(l.id), name: l.name }));
   }
 
-  /** The loan as the calculator form holds it, or why it can't be shown. */
-  async open(profileId: number, loanId: number): Promise<LoanInput | string> {
+  /**
+   * The loan as the calculator form holds it, or why it can't be shown. With a balance recorded from
+   * the bank, it starts from the latest one (its date is returned), as that is where the loan really is.
+   */
+  async open(
+    profileId: number,
+    loanId: number,
+  ): Promise<{ input: LoanInput; balanceDate: string | undefined } | string> {
     const [loan, extras] = await Promise.all([
       this.api.invoke(getLoan, { profileId, loanId }),
       this.api.invoke(getLoanExtras, { profileId, loanId }),
     ]);
-    return inputFromStored(loan, extras);
+    const stored = inputFromStored(loan, extras);
+    const latest = [...extras.balances].sort((a, b) => b.date.localeCompare(a.date))[0];
+    if (typeof stored === 'string' || !latest) {
+      return typeof stored === 'string' ? stored : { input: stored, balanceDate: undefined };
+    }
+
+    const input = inputFromBalance(stored, Number(loan.termMonths), {
+      date: latest.date,
+      amount: Number(latest.amount),
+    });
+    return typeof input === 'string' ? input : { input, balanceDate: latest.date };
   }
 
   /**

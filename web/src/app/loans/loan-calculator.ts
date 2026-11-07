@@ -169,9 +169,13 @@ export class LoanCalculator {
         this.notice.set(opened);
         return;
       }
-      this.input.set(opened);
+      this.input.set(opened.input);
       this.loanName.set(loan.name);
-      this.notice.set(`Opened ${loan.name}.`);
+      this.notice.set(
+        opened.balanceDate
+          ? `Opened ${loan.name} from the balance recorded ${this.date(opened.balanceDate)}.`
+          : `Opened ${loan.name}.`,
+      );
       await this.calculate();
     } catch (error) {
       this.notice.set(messageOf(error));

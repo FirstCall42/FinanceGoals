@@ -41,6 +41,53 @@ export function inputFromStored(loan: LoanView, extras: LoanExtrasView): LoanInp
   };
 }
 
+/** The same day in another month, kept inside the month (31 January plus a month is 28 February). */
+function addMonths(iso: string, months: number): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  const first = new Date(Date.UTC(y, m - 1 + months, 1));
+  const last = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0)).getUTCDate();
+  first.setUTCDate(Math.min(d, last));
+  return first.toISOString().slice(0, 10);
+}
+
+/**
+ * The loan as it stands on a day the bank reported its balance (#144): that balance is the new
+ * principal, paid out that day, with the payments, the term and the rates that are left. Real balances
+ * drift from the plan with extra payments, so this is where a forecast should start. The balance is
+ * taken as after any payment made that day. Returns the reason when nothing is left to pay.
+ */
+export function inputFromBalance(
+  loan: LoanInput,
+  termMonths: number,
+  balance: { readonly date: string; readonly amount: number },
+): LoanInput | string {
+  let made = 0;
+  while (made < termMonths && addMonths(loan.firstPayment, made) <= balance.date) {
+    made++;
+  }
+  if (made >= termMonths || balance.amount <= 0) {
+    return 'This loan has no payments left after its latest recorded balance.';
+  }
+
+  const left = termMonths - made;
+  // The rate in force on the balance day starts the new loan; later changes stay.
+  const rates = [{ from: loan.paidOut, rate: loan.startRate }, ...loan.rateChanges];
+  const inForce = rates.filter((c) => c.from <= balance.date).at(-1) ?? rates[0];
+  return {
+    ...loan,
+    principal: String(balance.amount),
+    paidOut: balance.date,
+    firstPayment: addMonths(loan.firstPayment, made),
+    termYears: typed(Math.round((left / 12) * 1e4) / 1e4),
+    startRate: inForce.rate,
+    rateChanges: rates.filter((c) => c.from > balance.date),
+    extras: loan.extras.filter((e) => e.date > balance.date),
+    monthlyFrom: loan.monthlyUntil && loan.monthlyUntil <= balance.date ? '' : loan.monthlyFrom,
+    monthlyAmount: loan.monthlyUntil && loan.monthlyUntil <= balance.date ? '' : loan.monthlyAmount,
+    monthlyUntil: loan.monthlyUntil && loan.monthlyUntil <= balance.date ? '' : loan.monthlyUntil,
+  };
+}
+
 /** The loan to store from what the calculator was asked: one variable-rate annuity period. */
 export function toCreateLoan(name: string, request: LoanCalculationRequest): CreateLoan {
   return {
