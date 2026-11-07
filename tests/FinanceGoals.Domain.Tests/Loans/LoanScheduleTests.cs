@@ -216,6 +216,52 @@ public sealed class LoanScheduleTests
     }
 
     [TestMethod]
+    public void A_fixed_rate_period_gives_way_to_the_next_period_at_its_boundary()
+    {
+        var variableFrom = new DateOnly(2027, 1, 1);
+        var loan = new Loan("Mortgage", new Money(1_200_000m, _nok), _firstPayment, 120,
+        [
+            new LoanPeriod(_start, RateType.Fixed, RepaymentType.Annuity, [new RateChange(_start, 0.06m)]),
+            new LoanPeriod(variableFrom, RateType.Variable, RepaymentType.Annuity, [new RateChange(variableFrom, 0.03m)]),
+        ]);
+
+        var schedule = LoanSchedule.Calculate(Thirty360(loan));
+
+        // Interest runs from the day after the previous payment, so the payment on the boundary day still
+        // belongs to the fixed period and the next one is the first at the new rate.
+        schedule.Where(i => i.Date <= variableFrom).ShouldAllBe(i => i.AnnualRate == 0.06m);
+        schedule.Where(i => i.Date > variableFrom).ShouldAllBe(i => i.AnnualRate == 0.03m);
+        var before = schedule.Single(i => i.Date == variableFrom);
+        var after = schedule.Single(i => i.Date == new DateOnly(2027, 2, 1));
+        after.Interest.ShouldBe(new Money(decimal.Round(before.Balance.Amount * 0.03m / 12m, 2, MidpointRounding.AwayFromZero), _nok));
+        // The payment is recalculated at the boundary: lower rate, lower payment; and level again afterwards.
+        after.Payment.Amount.ShouldBeLessThan(before.Payment.Amount);
+        schedule.Where(i => i.Date > variableFrom).Take(100).Select(i => i.Payment.Amount).Distinct().Count().ShouldBe(1);
+        schedule[^1].Balance.Amount.ShouldBe(0m);
+    }
+
+    [TestMethod]
+    public void An_interest_only_period_gives_way_to_straight_line_repayment_at_its_boundary()
+    {
+        var repaymentFrom = new DateOnly(2027, 1, 1);
+        var loan = new Loan("Serie", new Money(100_000m, _nok), _firstPayment, 24,
+        [
+            new LoanPeriod(_start, RateType.Variable, RepaymentType.InterestOnly, [new RateChange(_start, 0.06m)]),
+            new LoanPeriod(repaymentFrom, RateType.Variable, RepaymentType.StraightLine, [new RateChange(repaymentFrom, 0.06m)]),
+        ]);
+
+        var schedule = LoanSchedule.Calculate(Thirty360(loan));
+
+        schedule.Where(i => i.Date <= repaymentFrom).ShouldAllBe(i => i.Principal.Amount == 0m);
+        // The first payment after the boundary leaves 12 months: 100 000 over 12 is 8 333,33 a month plus 500 interest.
+        var first = schedule.Single(i => i.Date == new DateOnly(2027, 2, 1));
+        first.Principal.ShouldBe(new Money(8_333.33m, _nok));
+        first.Interest.ShouldBe(new Money(500m, _nok));
+        schedule.Count.ShouldBe(24);
+        schedule[^1].Balance.Amount.ShouldBe(0m);
+    }
+
+    [TestMethod]
     public void Principal_always_sums_to_the_loan_amount()
     {
         var loans = Arb.From(
