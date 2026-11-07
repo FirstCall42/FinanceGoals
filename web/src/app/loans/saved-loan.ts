@@ -71,6 +71,12 @@ export function inputFromBalance(
 
   const left = termMonths - made;
   const next = addMonths(loan.firstPayment, made);
+  // Every later payment is the first payment's day counted in months, so a day cut short by this month
+  // (the 31st in February) would stay short for the rest of the loan.
+  if (next.slice(8) !== loan.firstPayment.slice(8)) {
+    return 'This loan pays on a day some months lack, and the next payment falls in one of them; it cannot be started from a balance until a month where that day exists.';
+  }
+
   // A monthly extra that ends before the next payment has nothing left to pay (the API refuses one).
   const ended = loan.monthlyUntil !== '' && loan.monthlyUntil < next;
   // The rate in force on the balance day starts the new loan; later changes stay.

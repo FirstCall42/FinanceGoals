@@ -180,6 +180,15 @@ describe('Saved loans in the calculator', () => {
       expect(typeof input === 'object' && input.firstPayment).toBe('2026-03-31');
     });
 
+    it('refuses to start in a short month when the payment day would be cut short for good', () => {
+      const monthEnd = { ...stored(), firstPayment: '2026-01-31' };
+
+      // January 31 is paid; the next would be February 28, and every later payment would stay on the 28th.
+      const input = inputFromBalance(monthEnd, 360, { date: '2026-02-10', amount: 2_990_000 });
+
+      expect(input).toContain('day some months lack');
+    });
+
     it('says so when nothing is left to pay', () => {
       const input = inputFromBalance(stored(), 360, { date: '2056-03-01', amount: 100 });
 
