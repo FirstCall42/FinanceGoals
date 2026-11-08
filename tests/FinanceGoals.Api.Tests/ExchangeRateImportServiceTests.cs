@@ -46,6 +46,27 @@ public sealed class ExchangeRateImportServiceTests
     }
 
     [TestMethod]
+    public async Task A_new_instance_does_not_import_when_the_store_has_rates_from_the_last_week()
+    {
+        _store.LatestOnOrBefore("NOK", Arg.Any<DateOnly>()).Returns(new EurRate("NOK", new DateOnly(2026, 11, 4), 11.68m));
+
+        await Service().ImportIfDueAsync(CancellationToken.None);
+
+        await _source.DidNotReceive().FetchAsync(Arg.Any<CancellationToken>());
+    }
+
+    [TestMethod]
+    public async Task A_new_instance_imports_when_the_newest_stored_rate_is_a_week_old()
+    {
+        _store.LatestOnOrBefore("NOK", Arg.Any<DateOnly>()).Returns(new EurRate("NOK", new DateOnly(2026, 10, 30), 11.68m));
+        _source.FetchAsync(Arg.Any<CancellationToken>()).Returns([new EurRate("NOK", new DateOnly(2026, 11, 5), 11.7m)]);
+
+        await Service().ImportIfDueAsync(CancellationToken.None);
+
+        await _source.Received(1).FetchAsync(Arg.Any<CancellationToken>());
+    }
+
+    [TestMethod]
     public async Task Stopping_the_api_cancels_the_import()
     {
         using var stopping = new CancellationTokenSource();
@@ -94,6 +115,7 @@ public sealed class ExchangeRateImportServiceTests
     {
         var services = new ServiceCollection()
             .AddSingleton(new ExchangeRateImport(_source, _store))
+            .AddSingleton<IEurRates>(_store)
             .BuildServiceProvider();
         return new ExchangeRateImportService(services, new ExchangeRateImportTrigger(), _time, NullLogger<ExchangeRateImportService>.Instance);
     }
