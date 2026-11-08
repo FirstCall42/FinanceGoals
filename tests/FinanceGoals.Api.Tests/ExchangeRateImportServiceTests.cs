@@ -29,7 +29,7 @@ public sealed class ExchangeRateImportServiceTests
     }
 
     [TestMethod]
-    public async Task A_successful_import_waits_six_hours_before_the_next()
+    public async Task A_successful_import_waits_a_week_before_the_next()
     {
         _source.FetchAsync(Arg.Any<CancellationToken>()).Returns([new EurRate("NOK", new DateOnly(2026, 11, 5), 11.68m)]);
         var service = Service();
@@ -43,6 +43,27 @@ public sealed class ExchangeRateImportServiceTests
         await service.ImportIfDueAsync(CancellationToken.None);
         await _source.Received(2).FetchAsync(Arg.Any<CancellationToken>());
         await _store.Received(2).SaveAsync(Arg.Any<IReadOnlyList<EurRate>>(), Arg.Any<CancellationToken>());
+    }
+
+    [TestMethod]
+    public async Task A_new_instance_does_not_import_when_the_store_has_rates_from_the_last_week()
+    {
+        _store.LatestOnOrBefore("NOK", Arg.Any<DateOnly>()).Returns(new EurRate("NOK", new DateOnly(2026, 11, 4), 11.68m));
+
+        await Service().ImportIfDueAsync(CancellationToken.None);
+
+        await _source.DidNotReceive().FetchAsync(Arg.Any<CancellationToken>());
+    }
+
+    [TestMethod]
+    public async Task A_new_instance_imports_when_the_newest_stored_rate_is_a_week_old()
+    {
+        _store.LatestOnOrBefore("NOK", Arg.Any<DateOnly>()).Returns(new EurRate("NOK", new DateOnly(2026, 10, 30), 11.68m));
+        _source.FetchAsync(Arg.Any<CancellationToken>()).Returns([new EurRate("NOK", new DateOnly(2026, 11, 5), 11.7m)]);
+
+        await Service().ImportIfDueAsync(CancellationToken.None);
+
+        await _source.Received(1).FetchAsync(Arg.Any<CancellationToken>());
     }
 
     [TestMethod]
@@ -94,6 +115,7 @@ public sealed class ExchangeRateImportServiceTests
     {
         var services = new ServiceCollection()
             .AddSingleton(new ExchangeRateImport(_source, _store))
+            .AddSingleton<IEurRates>(_store)
             .BuildServiceProvider();
         return new ExchangeRateImportService(services, new ExchangeRateImportTrigger(), _time, NullLogger<ExchangeRateImportService>.Instance);
     }

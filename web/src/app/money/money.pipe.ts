@@ -1,9 +1,10 @@
 import { Pipe, PipeTransform } from '@angular/core';
 
 /**
- * Writes an amount the one way the app shows money (#102; format choice: #103): Norwegian grouping
- * and decimals, the currency's minor units, a real minus sign, and the ISO code after the number,
- * e.g. "1 234 567,89 NOK". Spaces are non-breaking so an amount never wraps.
+ * Writes an amount the one way the app shows money: grouping and decimals follow the browser's
+ * language (owner decision, #103), with the currency's minor units and the ISO code after the
+ * number, e.g. "1 234 567,89 NOK" in Norwegian or "1,234,567.89 NOK" in English. The space before
+ * the code is non-breaking so an amount never wraps.
  *
  * Usage: {{ amount | money: 'NOK' }} or {{ amount | money: 'JPY' : 0 }}
  */
@@ -20,18 +21,28 @@ export class MoneyPipe implements PipeTransform {
 
 const nonBreakingSpace = String.fromCharCode(0xa0);
 
-const formatters = new Map<number, Intl.NumberFormat>();
+const formatters = new Map<string, Intl.NumberFormat>();
 
-export function formatMoney(amount: number, currencyCode: string, minorUnits = 2): string {
-  let formatter = formatters.get(minorUnits);
+/** The browser's preferred language, e.g. "nb-NO"; undefined lets Intl use its default. */
+function browserLocale(): string | undefined {
+  return typeof navigator === 'undefined' ? undefined : navigator.language || undefined;
+}
+
+export function formatMoney(
+  amount: number,
+  currencyCode: string,
+  minorUnits = 2,
+  locale: string | undefined = browserLocale(),
+): string {
+  const key = `${locale ?? ''}|${minorUnits}`;
+  let formatter = formatters.get(key);
   if (!formatter) {
-    formatter = new Intl.NumberFormat('nb-NO', {
+    formatter = new Intl.NumberFormat(locale, {
       minimumFractionDigits: minorUnits,
       maximumFractionDigits: minorUnits,
     });
-    formatters.set(minorUnits, formatter);
+    formatters.set(key, formatter);
   }
 
-  // nb-NO already uses a non-breaking space for grouping and U+2212 for the minus sign.
   return `${formatter.format(amount)}${nonBreakingSpace}${currencyCode}`;
 }
