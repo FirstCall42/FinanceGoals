@@ -101,7 +101,7 @@ public sealed class ForecastTests
             principal = 40_000m,
             paidOut = "2026-01-01",
             firstPaymentDate = "2026-02-01",
-            termMonths = 24,
+            termMonths = 360,
             periods = new object[]
             {
                 new { start = "2026-01-01", rateType = "Variable", repaymentType = "Annuity", rates = new object[] { new { effectiveFrom = "2026-01-01", annualRatePercent = 5m } } },
