@@ -90,7 +90,7 @@ public sealed class ForecastTests
     }
 
     [TestMethod]
-    public async Task The_forecast_subtracts_what_the_loans_owe_today_so_it_continues_the_net_history()
+    public async Task The_forecast_subtracts_what_the_loans_owe_following_their_schedules()
     {
         var (profileId, _) = await AccountWithBalanceAsync("fc-owner-4", 100_000m);
         var path = $"/api/profiles/{profileId}";
@@ -101,7 +101,7 @@ public sealed class ForecastTests
             principal = 40_000m,
             paidOut = "2026-01-01",
             firstPaymentDate = "2026-02-01",
-            termMonths = 24,
+            termMonths = 360,
             periods = new object[]
             {
                 new { start = "2026-01-01", rateType = "Variable", repaymentType = "Annuity", rates = new object[] { new { effectiveFrom = "2026-01-01", annualRatePercent = 5m } } },
@@ -113,8 +113,12 @@ public sealed class ForecastTests
 
         var forecast = await ReadAsync(await SendAsync(HttpMethod.Get, $"{path}/net-worth/forecast?months=6", "fc-owner-4"));
 
-        ((decimal)forecast["points"]![0]!["expected"]!).ShouldBe(70_000m);
-        ((decimal)forecast["points"]![6]!["expected"]!).ShouldBe(70_000m);
+        // The balance recorded in January is old: the loan has been paid since, so less than 30 000 is owed, and less each month.
+        var first = (decimal)forecast["points"]![0]!["expected"]!;
+        var last = (decimal)forecast["points"]![6]!["expected"]!;
+        first.ShouldBeGreaterThan(70_000m);
+        last.ShouldBeGreaterThan(first);
+        last.ShouldBeLessThanOrEqualTo(100_000m);
     }
 
     [TestMethod]

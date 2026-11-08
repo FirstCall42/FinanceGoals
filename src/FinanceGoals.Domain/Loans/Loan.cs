@@ -129,10 +129,16 @@ public sealed class Loan
         Money? feePerPayment = null,
         DateOnly? paidOut = null,
         DayCount dayCount = DayCount.ActualActual,
-        bool securedOnProperty = false)
+        bool securedOnProperty = false,
+        int? paymentDay = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentNullException.ThrowIfNull(periods);
+        if (paymentDay is < 1 or > 31)
+        {
+            throw new ArgumentOutOfRangeException(nameof(paymentDay), paymentDay, "The payment day is a day of the month, 1 to 31.");
+        }
+
         if (principal.Amount <= 0)
         {
             throw new ArgumentOutOfRangeException(nameof(principal), principal.Amount, "The principal must be positive.");
@@ -194,6 +200,7 @@ public sealed class Loan
         Start = start;
         DayCount = dayCount;
         SecuredOnProperty = securedOnProperty;
+        PaymentDay = paymentDay ?? firstPaymentDate.Day;
         _periods = ordered;
     }
 
@@ -202,6 +209,20 @@ public sealed class Loan
     public Money Principal { get; }
 
     public DateOnly FirstPaymentDate { get; }
+
+    /// <summary>
+    /// The day of the month payments fall on. A short month takes its last day, and the next month goes back
+    /// to this day (a loan paid on the 31st pays on 28 February and 31 March). It is the first payment's day
+    /// unless a loan continued from a balance carries the original one.
+    /// </summary>
+    public int PaymentDay { get; }
+
+    /// <summary>The day of payment <paramref name="number"/> (1 is the first payment).</summary>
+    public DateOnly PaymentDate(int number)
+    {
+        var month = FirstPaymentDate.AddDays(1 - FirstPaymentDate.Day).AddMonths(number - 1);
+        return new DateOnly(month.Year, month.Month, Math.Min(PaymentDay, DateTime.DaysInMonth(month.Year, month.Month)));
+    }
 
     public int TermMonths { get; }
 
@@ -223,7 +244,7 @@ public sealed class Loan
     public bool SecuredOnProperty { get; }
 
     /// <summary>The day of the last payment.</summary>
-    public DateOnly LastPaymentDate => FirstPaymentDate.AddMonths(TermMonths - 1);
+    public DateOnly LastPaymentDate => PaymentDate(TermMonths);
 
     /// <summary>The period a day falls in, from <see cref="Start"/> to <see cref="LastPaymentDate"/>.</summary>
     public LoanPeriod PeriodOn(DateOnly day)
@@ -234,6 +255,40 @@ public sealed class Loan
         }
 
         return _periods.Last(period => period.Start <= day);
+    }
+
+    /// <summary>
+    /// The loan as it continues from a balance the bank reported on a day: that balance is the new principal,
+    /// the rate in force that day starts it, and later rate changes and periods stay. Null when nothing is
+    /// left to pay. It keeps the loan's payment day, so a loan paid on the 31st still pays on the 31st.
+    /// </summary>
+    public Loan? StartingFrom(DateOnly day, decimal balance)
+    {
+        if (balance <= 0 || day < Start)
+        {
+            return null;
+        }
+
+        var made = 0;
+        while (made < TermMonths && PaymentDate(made + 1) <= day)
+        {
+            made++;
+        }
+
+        if (made >= TermMonths)
+        {
+            return null;
+        }
+
+        var next = PaymentDate(made + 1);
+
+        var current = PeriodOn(day);
+        var rates = new List<RateChange> { new(day, current.RateOn(day)) };
+        rates.AddRange(current.Rates.Where(rate => rate.EffectiveFrom > day));
+        var periods = new[] { new LoanPeriod(day, current.RateType, current.RepaymentType, rates) }
+            .Concat(_periods.Where(period => period.Start > day))
+            .ToArray();
+        return new Loan(Name, new Money(balance, Principal.Currency), next, TermMonths - made, periods, FeePerPayment, day, DayCount, SecuredOnProperty, PaymentDay);
     }
 
     /// <summary>The nominal annual rate in effect on a day of the loan.</summary>
@@ -260,6 +315,6 @@ public sealed class Loan
         var rates = period.Rates.Where(rate => rate.EffectiveFrom != change.EffectiveFrom).Append(change).ToArray();
         var updated = new LoanPeriod(period.Start, period.RateType, period.RepaymentType, rates);
         var periods = _periods.Select(p => ReferenceEquals(p, period) ? updated : p).ToArray();
-        return new Loan(Name, Principal, FirstPaymentDate, TermMonths, periods, FeePerPayment, Start, DayCount, SecuredOnProperty);
+        return new Loan(Name, Principal, FirstPaymentDate, TermMonths, periods, FeePerPayment, Start, DayCount, SecuredOnProperty, PaymentDay);
     }
 }
