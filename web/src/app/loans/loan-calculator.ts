@@ -10,6 +10,7 @@ import {
 } from './loan-calculator.service';
 import { SavedLoan, SavedLoanService } from './saved-loan.service';
 import { DateField, formatDate } from '../date/date-field';
+import { ExtraScenarios } from './extra-scenarios';
 import { ExtraVsInvest } from './extra-vs-invest-panel';
 import { LoanRecords } from './loan-records';
 import { PayoffChart } from './payoff-chart';
@@ -33,7 +34,7 @@ interface ScheduleYear {
  */
 @Component({
   selector: 'app-loan-calculator',
-  imports: [DateField, MoneyPipe, PayoffChart, ExtraVsInvest, LoanRecords],
+  imports: [DateField, MoneyPipe, PayoffChart, ExtraScenarios, ExtraVsInvest, LoanRecords],
   templateUrl: './loan-calculator.html',
   styleUrl: './loan-calculator.scss',
 })
